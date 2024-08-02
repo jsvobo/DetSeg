@@ -122,6 +122,7 @@ class CocoLoader():
         
 
 
+
 if __name__ == "__main__": 
     print("\nTesting coco loading")
     torch.manual_seed(0)
