@@ -12,7 +12,7 @@ class CocoLoader():
     based on dataset directory, directory of the dataset itself, year (2014 or 2017) and type of annotation (instances, captions, person_keypoints),
     the DatasetCOCO class will extract the data and masks through the API class and torch interface
 
-    returned instances: torch dataset, torch data loader, pycocotools API class (which is used for parsing masks and annotations)
+    returned instances: torch dataset, pycocotools API class (which is used for parsing masks and annotations)
     '''
     def __init__(self, config=None):
         if config == None:
@@ -27,6 +27,12 @@ class CocoLoader():
         self._parse_paths()
         
     def _parse_paths(self):
+        '''
+        Parses the paths to the dataset and annotations.
+        Coco dataset has a specific structure, so the paths are hardcoded.
+        test does NOT have annotations, and is for internal evaluation of coco challenges. Only train and val have annotations
+        '''
+
         path_images = os.path.join(self.datasets_dir, self.subdir)
         path_annotations = os.path.join(self.datasets_dir, self.subdir, "annotations")
 
@@ -55,18 +61,11 @@ class CocoLoader():
             transform=transformations
         )
 
-        loader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=4,
-            shuffle=True,
-            num_workers=4,
-        )
-
         api_class = pycocotools.coco.COCO(info["annFile"])  
         categories = api_class.loadCats(api_class.getCatIds())
-        category_names = [category["name"] for category in categories]
+        #category_names = [category["name"] for category in categories]
 
-        return loader, dataset, api_class
+        return dataset, api_class
 
     def load_train(self,transformations: list = None):
         """
@@ -110,18 +109,18 @@ class CocoLoader():
             A dictionary containing the loaders, datasets, and API classes for each split.
         """
 
-        train_loader, train_dataset, train_annotations = self.load_train(transformations)
-        val_loader, val_dataset, val_annotations = self.load_val(transformations)
-        test_loader, test_dataset, test_annotations = self.load_test(transformations)
+        train_dataset, train_annotations = self.load_train(transformations)
+        val_dataset, val_annotations = self.load_val(transformations)
+        test_dataset, test_annotations = self.load_test(transformations)
         
         return {    
-            'test': {'loader': test_loader, 'dataset': test_dataset, 'annotations': test_annotations},
-            'train': {'loader': train_loader, 'dataset': train_dataset, 'annotations': train_annotations},
-            'val': {'loader': val_loader, 'dataset': val_dataset, 'annotations': val_annotations}
+            'test': {'dataset': test_dataset, 'annotations': test_annotations},
+            'train': { 'dataset': train_dataset, 'annotations': train_annotations},
+            'val': {'dataset': val_dataset, 'annotations': val_annotations}
         }
         
 
-
+        
 
 if __name__ == "__main__": 
     print("\nTesting coco loading")
