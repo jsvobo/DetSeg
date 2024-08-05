@@ -7,8 +7,8 @@ if __name__ == "__main__":
 
     coco = CocoLoader()
     transforms = None
-    loader_train, data_train, api = coco.load_train(transformations=transforms)
-    loader_val, data_val, api = coco.load_val(transformations=transforms) 
+    data_train, api = coco.load_train(transformations=transforms)
+    #data_val, api = coco.load_val(transformations=transforms) 
 
     #load detection model(s)
 
