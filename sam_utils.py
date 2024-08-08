@@ -4,6 +4,9 @@ from matplotlib import colormaps
 
 
 def show_mask(mask, ax, random_color=False):
+    '''
+    Interpreted from https://github.com/facebookresearch/segment-anything
+    '''
     if random_color:
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
     else:
@@ -13,13 +16,19 @@ def show_mask(mask, ax, random_color=False):
     ax.imshow(mask_image)
     
 def show_points(coords, labels, ax, marker_size=300):
+    '''
+    Interpreted from https://github.com/facebookresearch/segment-anything
+    '''
     pos_points = coords[labels==1]
     neg_points = coords[labels==0]
     ax.scatter(pos_points[:, 0], pos_points[:, 1], color='green', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
     ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)   
     
 
-def print_masks_point(masks, scores,img):
+def print_masks_point(masks,scores,img):
+    '''
+    Interpreted from https://github.com/facebookresearch/segment-anything
+    '''
     for i, (mask, score) in enumerate(zip(masks, scores)):
         plt.figure(figsize=(10,10))
         plt.imshow(img)
@@ -30,6 +39,10 @@ def print_masks_point(masks, scores,img):
         plt.show() 
 
 def plot_box(box, ax, color='red', linewidth=2):
+    '''
+    bounding boxes in format x0,y0,x1,y1 (main diagonal points)
+    Plots the boc on the ax from plt
+    '''
     ax.plot([box[0], box[2], box[2], box[0], box[0]],
             [box[1], box[1], box[3], box[3], box[1]],
             color=color, linewidth=linewidth)
@@ -37,11 +50,13 @@ def plot_box(box, ax, color='red', linewidth=2):
 def print_masks_boxes(masks, boxes, img):
     '''
     bounding boxes in format x0,y0,x1,y1 (main diagonal points)
+    rints all masks and boxes on the image
     '''
     scale=8
     opacity=0.8
     box_width=2
     BG_MASK=False
+    
     assert(len(masks)==len(boxes))
 
     plt.figure(figsize=(scale, scale))
@@ -65,8 +80,9 @@ def print_masks_boxes(masks, boxes, img):
 
 
 def prepare_sam(device):
-    #TODO: hardcoded rn? config,
-    #loads sam predictor model 
+    '''
+    Load SAM-1 predictor and model itself (needed for some functions) 
+    '''
     from segment_anything import SamPredictor, sam_model_registry
     sam_checkpoint = "/datagrid/personal/janoukl1/out/ImDec/ckpts/sam_vit_h_4b8939.pth"
     model_type = "vit_h"

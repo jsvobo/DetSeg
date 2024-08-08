@@ -1,5 +1,7 @@
 
 ''' 
+TODO:   Possibly can load boxes or masks from a file without
+        loading and running a model for inference
 
 '''
 
@@ -22,10 +24,10 @@ class AnnotationSaver():
     '''
     pass
 
-class image_saver():
+class ImageSaver():
     ''' 
     Class which saves the images with bboxes drawn on them.
-    For visualization purposes.
+    For visualization purposes (??).
     '''
     pass
 

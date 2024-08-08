@@ -30,7 +30,9 @@ class CocoLoader():
         '''
         Parses the paths to the dataset and annotations.
         Coco dataset has a specific structure, so the paths are hardcoded.
-        test does NOT have annotations, and is for internal evaluation of coco challenges. Only train and val have annotations
+        test does NOT have annotations, and is for internal evaluation of coco challenges. 
+        
+        Only train and val have annotations!
         '''
 
         path_images = os.path.join(self.datasets_dir, self.subdir)
