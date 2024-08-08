@@ -1,21 +1,44 @@
-import numpy as np
 
-def show_mask(mask, ax, random_color=False):
-    if random_color:
-        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-    else:
-        color = np.array([30/255, 144/255, 255/255, 0.6])
-    h, w = mask.shape[-2:]
-    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-    ax.imshow(mask_image)
-    
-def show_points(coords, labels, ax, marker_size=300):
-    pos_points = coords[labels==1]
-    neg_points = coords[labels==0]
-    ax.scatter(pos_points[:, 0], pos_points[:, 1], color='green', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
-    ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)   
-    
-def show_box(box, ax):
+
+def get_coco_boxes(metadata):
+    '''
+    Takes the COCO metadata and returns the bounding boxes. 
+    for one image
+    '''
+    boxes=[]
+    for ann in metadata:
+        box=box_coco_to_sam(ann['bbox'])
+        boxes.append(box)
+    return boxes
+
+def get_coco_masks(metadata:dict,api_class):
+    '''
+    Takes the COCO metadata and returns the segmentation masks. 
+    for one images
+    '''
+    masks=[]
+    for ann in metadata:
+        mask = api_class.annToMask(ann)
+        masks.append(mask)
+
+    return masks
+
+def compute_iou_one_img(gt_mask,masks):
+    ''' 
+        For one bounding box, compute IOU with one
+    '''
+    return -1
+
+def box_coco_to_sam(coco_box):
+    '''
+    Convert coco box to sam box
+    '''
+    return coco_box[0],coco_box[1],coco_box[0]+coco_box[2],coco_box[1]+coco_box[3]
+
+def get_middle_point(box):
+    '''
+    Get the middle point of a bounding box
+    '''
     x0, y0 = box[0], box[1]
-    w, h = box[2] - box[0], box[3] - box[1]
-    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))    
+    x1, y1 = box[2], box[3]
+    return [(x0+x1)/2,(y0+y1)/2]
