@@ -1,5 +1,4 @@
-Datasets/*
-install_commands.txt
+Datasets/COCO
 __*
 PROB
 mvits_for_class_agnostic_od

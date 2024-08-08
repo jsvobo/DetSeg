@@ -1,7 +1,8 @@
 
 ''' 
-TODO:   Possibly can load boxes or masks from a file without
-        loading and running a model for inference
+TODO:   
+    Possibly can load bboxes or masks from a file without
+    loading and running a model for inference
 
 '''
 

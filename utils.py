@@ -25,6 +25,7 @@ def get_coco_masks(metadata:dict,api_class):
 
 def compute_iou_one_img(gt_mask,masks):
     ''' 
+        TODO: Implement this function, or delete? (torchmetrics)
         For one bounding box, compute IOU with one
     '''
     return -1
@@ -32,12 +33,13 @@ def compute_iou_one_img(gt_mask,masks):
 def box_coco_to_sam(coco_box):
     '''
     Convert coco box to sam box
+    from x0,y0,w,h to x0,y0,x1,y1
     '''
     return coco_box[0],coco_box[1],coco_box[0]+coco_box[2],coco_box[1]+coco_box[3]
 
 def get_middle_point(box):
     '''
-    Get the middle point of a bounding box
+    Get the middle point of a bounding box in format x0,y0,x1,y1
     '''
     x0, y0 = box[0], box[1]
     x1, y1 = box[2], box[3]
