@@ -32,5 +32,9 @@ seaborn==0.12.1
 numpy>=1.22
 ipdb==0.13.9
 
+opencv-python 
+onnxruntime 
+onnx
+
 
 

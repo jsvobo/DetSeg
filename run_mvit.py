@@ -34,7 +34,6 @@ def detect_objects_mvit(dataset='COCO'):
     run_inference(model, images_dir, output_path, caption=text_query, multi_crop=multi_crop)
     
 
-
 def load_mvit_results(dataset='COCO'):
     '''
     TODO: write this function!!

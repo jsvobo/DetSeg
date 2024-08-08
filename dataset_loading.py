@@ -66,6 +66,7 @@ class CocoLoader():
         #category_names = [category["name"] for category in categories]
 
         return dataset, api_class
+    
 
     def load_train(self,transformations: list = None):
         """

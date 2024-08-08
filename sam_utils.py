@@ -76,3 +76,6 @@ def prepare_sam(device):
 
     return SamPredictor(sam),sam
 
+def select_best_mask(masks, scores):
+    idx = np.argmax(scores)
+    return masks[idx], scores[idx]
