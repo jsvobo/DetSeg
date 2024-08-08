@@ -48,6 +48,8 @@ This repository is for exploration of different object detection and segmentatio
         conda install python=3.11 pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia 
         pip install -r ./requirements.txt 
     
+        mkdir Datasets
+
     Copy/link coco to Datasets/ folder ()
         cp location ./Datasets/
         ln -s location ./Datasets/
@@ -70,7 +72,6 @@ This repository is for exploration of different object detection and segmentatio
 
 
 ## Commands
-
         git clone https://github.com/mmaaz60/mvits_for_class_agnostic_od.git 
         git clone https://github.com/orrzohar/PROB.git
 
