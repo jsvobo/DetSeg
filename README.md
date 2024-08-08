@@ -30,7 +30,6 @@ This repository is for exploration of different object detection and segmentatio
 
 
 ### Recommended coco structure
-```
         COCO/
             train2017
             val2017
@@ -39,44 +38,36 @@ This repository is for exploration of different object detection and segmentatio
                 instances_train2017.json
                 instances_val2017.json
                 image_info_test2017.json
-```
+
 
 
 ## To run:
     Install requirements and setup conda env.:
-    ```
         conda create -n detect_env 
         conda activate detect_env
         conda install python=3.11 pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia 
         pip install -r ./requirements.txt 
-    ```
-
+    
     Copy/link coco to Datasets/ folder ()
-    ```
         cp location ./Datasets/
         ln -s location ./Datasets/
-    ```
+    
 
     Test coco loading by running:
-    ```
         python data_loader.py 
-    ```
 
     You can see coco images in coco_visuals.ipynb
-
     Eventually download PROB and MViT detection models  (not functional rn)
-    ```
         git clone https://github.com/mmaaz60/mvits_for_class_agnostic_od.git 
         git clone https://github.com/orrzohar/PROB.git
-    ```
+    
 
-
-
+./conf not really working currently
 
 
 
 ### Commands
-```
+
 git clone https://github.com/mmaaz60/mvits_for_class_agnostic_od.git 
 git clone https://github.com/orrzohar/PROB.git
 
@@ -118,5 +109,5 @@ python inference/main.py -m "$MODEL_NAME" -i "$DATASET_BASE_DIR/coco/val2017" -c
 
 # sam
 pip install git+https://github.com/facebookresearch/segment-anything.git
-```
+
 
