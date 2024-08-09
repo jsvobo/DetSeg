@@ -1,8 +1,19 @@
 import numpy as np
+
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
+from matplotlib.colors import ListedColormap
+import matplotlib.patches as mpatches
 from PIL import Image
 
+
+colors_together = ['blue', 'red','yellow','green']
+patches_together = [mpatches.Patch(color=colors_together[i]) for i in range(len(colors_together))]
+cmap_together=ListedColormap(colors_together)
+
+colors_separate = ['blue', 'red']
+patches_separate = [mpatches.Patch(color=colors_separate[i]) for i in range(len(colors_separate))]
+cmap_single=ListedColormap(colors_separate)
 
 def show_mask(mask, ax, random_color=False):
     '''
@@ -55,7 +66,7 @@ def print_masks_boxes(masks, boxes, img):
     '''
     scale=8
     opacity=0.8
-    box_width=2
+    box_width=3
     BG_MASK=False
     
     assert(len(masks)==len(boxes))

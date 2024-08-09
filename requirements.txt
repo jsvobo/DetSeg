@@ -37,5 +37,6 @@ opencv-python
 onnxruntime 
 onnx
 
+mmcv-full
 
 
