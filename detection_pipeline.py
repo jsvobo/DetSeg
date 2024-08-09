@@ -1,14 +1,14 @@
 
-from dataset_loading import CocoLoader
+from datasets.dataset_loading import CocoLoader
+import utils 
+
+
 import torch
 import numpy as np
 
 #sam
-import sam_utils #sam_utils in the same directory
 from segment_anything import SamPredictor, sam_model_registry
 
-#others
-import utils
 
 
 '''
@@ -42,7 +42,7 @@ if __name__ == "__main__":
         #TODO ...
     
     #load segmentation model(s)
-    predictor,sam = sam_utils.prepare_sam("cuda")
+    predictor,sam = utils.prepare_sam("cuda")
     IoU_avg=0
     successful_boxes=0
 
@@ -68,20 +68,20 @@ if __name__ == "__main__":
         detected_masks=[] #mask for each box
         success=np.zeros(len(detected_boxes)) #1 if the mask was "good"
 
-        for i,box in enumerate(detected_boxes): #prompt by box only
+        for i,box in enumerate(detected_boxes): #prompt by box only 
             masks, scores, logits = predictor.predict( #TODO: batched prediction? for all boxes at once?
                 point_coords=None,
                 point_labels=None,
                 box=np.array(box),
                 multimask_output=True, 
                 )
-            mask,score=sam_utils.select_best_mask(masks,scores)
+            mask,score=utils.select_best_mask(masks,scores)
 
             if score>=threshold:
                 success[i]=1
                 detected_masks.append(mask) 
 
-                IoU = utils.compute_iou_one_img_masks(gt_masks[i],mask) #segmentation metrics
+                IoU = utils.get_IoU_masks(gt_masks[i],mask) #segmentation metrics
                 print("IoU: ",IoU)
                 IoU_avg+=IoU
 

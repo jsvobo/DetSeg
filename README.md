@@ -69,6 +69,9 @@ This repository is for exploration of different object detection and segmentatio
     Other datasets ?
     SAM-2 ?
 
+### Important links:
+DETR - how to get the attention points?
+    https://github.com/facebookresearch/detr/issues/593
 
 
 ## Commands
