@@ -31,7 +31,7 @@ def detect_objects_mvit(dataset='COCO'):
     checkpoints_path = '/mnt/vrg2/imdec/models/detectors/mdef_detr_minus_language.pth' #path to model checkpoint
     model = Model(model_name, checkpoints_path).get_model()
 
-    run_inference(model, images_dir, output_path, caption=text_query, multi_crop=multi_crop)
+    run_inference(model, images_dir, output_path, caption=text_query, multi_crop=multi_crop) #TODO: try run?
     
 
 def load_mvit_results(dataset='COCO'):

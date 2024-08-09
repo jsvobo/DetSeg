@@ -10,6 +10,7 @@ from segment_anything import SamPredictor, sam_model_registry
 #others
 import utils
 
+
 '''
 Main pipeline logic. 
 load datasets
@@ -66,7 +67,7 @@ if __name__ == "__main__":
         success=np.zeros(len(detected_boxes)) #1 if the mask was "good"
 
         for i,box in enumerate(detected_boxes): #prompt by box only
-            masks, scores, logits = predictor.predict(
+            masks, scores, logits = predictor.predict( #TODO: batched prediction? for all boxes at once?
                 point_coords=None,
                 point_labels=None,
                 box=np.array(box),
