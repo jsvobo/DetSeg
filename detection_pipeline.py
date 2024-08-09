@@ -43,9 +43,11 @@ if __name__ == "__main__":
     
     #load segmentation model(s)
     predictor,sam = sam_utils.prepare_sam("cuda")
+    IoU_avg=0
+    successful_boxes=0
 
     for number_img,item in enumerate(data_train):
-        if number_img>100: break #just testing here
+        if number_img>10: break #just testing here
 
         img = item[0] 
         metadata = item[1]
@@ -78,13 +80,18 @@ if __name__ == "__main__":
             if score>=threshold:
                 success[i]=1
                 detected_masks.append(mask) 
-                
+
+                IoU = utils.compute_iou_one_img_masks(gt_masks[i],mask) #segmentation metrics
+                print("IoU: ",IoU)
+                IoU_avg+=IoU
+
         detected_masks=np.array(detected_masks)
         detected_boxes=np.array(detected_boxes)[success==1]
+        successful_boxes+=len(detected_boxes)
 
         #TODO: metrics for segmentation against GT
-
+        
     #aggregate metrics over whole dataset
-
+    print("IoU avg: ",IoU_avg/successful_boxes) #detected boxes after filtering bad masks
     print("DONE")
     
