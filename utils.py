@@ -1,4 +1,4 @@
-
+import numpy as np
 
 def get_coco_boxes(metadata):
     '''
@@ -23,12 +23,16 @@ def get_coco_masks(metadata:dict,api_class):
 
     return masks
 
-def compute_iou_one_img(gt_mask,masks):
+def compute_iou_one_img_masks(gt_mask,mask):
     ''' 
-        TODO: Implement this function, or delete? (torchmetrics)
-        For one bounding box, compute IOU with one
+        compute IoU between 2 sets of masks
     '''
-    return -1
+    
+    intersection = np.sum((gt_mask + mask)==2)
+    union =np.sum((gt_mask + mask)!=0)  
+    IoU = intersection/union
+
+    return IoU
 
 def box_coco_to_sam(coco_box):
     '''
