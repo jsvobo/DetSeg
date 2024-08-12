@@ -128,28 +128,23 @@ def test_coco_loading():
     coco = CocoLoader()
 
     loader, dataset, annotations = coco.load_train()
-    print("\nLoaded train dataset")
-    print('Number of samples: ', len(dataset))
     cats = annotations.loadCats(annotations.getCatIds())
-    nms=[cat['name'] for cat in cats]
-    print('train categories: \n{}\n'.format(' '.join(nms)))
+    nms1=[cat['name'] for cat in cats]
 
     loader, dataset, annotations = coco.load_val()
-    print("\nLoaded val dataset")
-    print('Number of samples: ', len(dataset))
+
     cats = annotations.loadCats(annotations.getCatIds())
-    nms=[cat['name'] for cat in cats]
-    print('val categories: \n{}\n'.format(' '.join(nms)))
+    nms2=[cat['name'] for cat in cats]
+    asser(nms1==nms2)
 
     loader, dataset, annotations = coco.load_test()
-    print("\nLoaded test dataset")
-    print('Number of samples: ', len(dataset))
+
     cats = annotations.loadCats(annotations.getCatIds())
-    nms=[cat['name'] for cat in cats]
-    print('test categories: \n{}\n'.format(' '.join(nms)))
+    nms3=[cat['name'] for cat in cats]
+    asser(nms1==nms3)
 
     coco.load_all()
-    print("Tests passed\n")
+
 
 
 if __name__ == "__main__": 

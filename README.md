@@ -13,22 +13,39 @@ This repository is for exploration of different object detection and segmentatio
     Segmentation
         SAM-1 (downloaded by pip)
 
-### Main code:
+### Code structure, main modules:
     sam.ipynb - testing coco loading
-    run_mvit.py - wrapper for MViT model
-    run_prob.py - wrapper for PROB model
+    test_all.py - runs all available tests for the code
     detection_pipeline.py - main pipeline logic
     coco_visuals.ipynb - notebook working with coco dataset
+    
+    /run_detection - files and classes working with external models
+        run_mvit.py - wrapper for MViT model
+        run_prob.py - wrapper for PROB model
+    
+    /utils
+        utils.py - general utility functions. work with bboxes and masks
+        sam_utils.py - code for wiking with sam model(s)
+        visual_utils.py - code snippets used for data visualisation in plt
 
-### Support files:
-    cuda_test.py - testing cuda (need toolkit to work?)
-    utils.py - general utility functions. work with bboxes and masks
-    sam_utils.py - code snippets used for sam visualisation
+    /testing
+        cuda_test.py - testing cuda availability and where CUDA_HOME is set to
 
-### Class definitions:
-    saver_loader.py - TODO: daving and loading partial results
-    dataset_loading.py - coco wrapper, filepath parsing
+    /datasets - where to put datasets files and files working with the datasets
+        saver_loader.py - TODO: daving and loading partial results
+        dataset_loading.py - coco wrapper, filepath parsing
 
+    /config - (not used right now, will use config files in the future)
+
+### Working with our packages:
+    to import everything from utils:
+        import utils
+    then use utils.fn() or just fn() (since they are unpacked by *) to call any function from any utils package
+    similarly with datasets 
+
+    from run detection, you can import 2 folders at once: mvit and prob, which contain definitions for wrappers to the respective models
+        import run_detection 
+        then use mvit.detect_objects(...) and so on (cant use the function dorectly, since they are naming conflicts between the inferrence functions)
 
 ### Recommended coco structure
         COCO/
@@ -48,15 +65,14 @@ This repository is for exploration of different object detection and segmentatio
         conda install python=3.11 pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia 
         pip install -r ./requirements.txt 
     
-        mkdir Datasets
+        mkdir datasets
 
-    Copy/link coco to Datasets/ folder ()
-        cp location ./Datasets/
-        ln -s location ./Datasets/
+    Copy/link coco to datasets/ folder ()
+        cp location ./datasets/
+        ln -s location ./datasets/
     
-
     Test coco loading by running:
-        python data_loader.py 
+        python datasets/dataset_loading.py 
 
     You can see coco images in coco_visuals.ipynb
     Eventually download PROB and MViT detection models  (not functional rn)
@@ -65,6 +81,7 @@ This repository is for exploration of different object detection and segmentatio
     
 ### TODO:
     Sgementation and detection metrics
+    Batching SAM on one image (all boxes)
     Detectors - Wrappers & get working
     Other datasets ?
     SAM-2 ?
@@ -74,11 +91,13 @@ DETR - how to get the attention points?
     https://github.com/facebookresearch/detr/issues/593
 
 
+
+
 ## Commands
         git clone https://github.com/mmaaz60/mvits_for_class_agnostic_od.git 
         git clone https://github.com/orrzohar/PROB.git
 
-    make sure python interpreter sees the script location inside the projects
+    make sure python interpreter sees the script location inside the projects (better use __init__.py)
         export PYTHONPATH=$(pwd)/mvits_for_class_agnostic_od:$PYTHONPATH
 
     CUDA_HOME should look like '/home.stud/svobo114/.conda/envs/detect_env'
@@ -92,7 +111,7 @@ DETR - how to get the attention points?
 
 
     you should see True and a path (if installed cuda-toolkit)
-        python ./cuda_test.py 
+        python ./testing/cuda_test.py 
 
     build rust compiler in your shell if needed (for some transformers versions)
     When prompted, proceed with default installation

@@ -13,7 +13,7 @@ TODO: make a loader for the data, independent of the model???
 bit too hard, maybe just a parent class
 '''
 
-def detect_objects_mvit(dataset='COCO'):
+def detect_objects(dataset='COCO'):
     ''' 
     code loosely interpreted from https://github.com/mmaaz60/mvits_for_class_agnostic_od/ inference/main.py , function main()
     this function prepares datasets and model for inference and runs the inference
@@ -49,7 +49,7 @@ def load_mvit_results(dataset='COCO'):
 
 
 if __name__ == "__main__": 
-    detect_objects_mvit()
+    detect_objects()
     print("Done")
     #bboxes = load_mvit_results()
     #print("size:" + str(len(bboxes)))

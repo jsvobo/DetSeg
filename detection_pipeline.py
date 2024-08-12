@@ -31,7 +31,8 @@ Goal:
 if __name__ == "__main__": 
     assert(torch.cuda.is_available())
 
-    threshold=0.8 #load? or like a argument to the script?
+    threshold=0.8 #load? or like a argument to the script? 
+    #IoU threshold for a mask to be considered "good"
 
     #load COCO dataset
     coco = CocoLoader()
@@ -40,6 +41,7 @@ if __name__ == "__main__":
 
     #load detection model(s) 
         #TODO ...
+
     
     #load segmentation model(s)
     predictor,sam = utils.prepare_sam("cuda")
@@ -62,7 +64,7 @@ if __name__ == "__main__":
 
         #for GT boxes RN, else detection HERE!! TODO: detection module(s)
         detected_boxes = gt_bboxes 
-            #TODO: metrics for detection against GT
+            #TODO: metrics for detection against GT IoU, recall 50%, 75%, etc.
 
         #Segmentation
         detected_masks=[] #mask for each box
