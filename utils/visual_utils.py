@@ -77,6 +77,27 @@ def print_masks_boxes(masks, boxes, img):
         plot_box(box,plt.gca(),linewidth=box_width) #color=cmap(i/num_boxes),
     plt.show()
 
+def print_masks(masks,img):
+    scale=8
+    opacity=0.8
+    box_width=3
+    BG_MASK=False
+
+    plt.figure(figsize=(scale, scale))
+    plt.imshow(img) #first image
+    plt.axis('off')
+
+    cmap =colormaps['viridis']
+    alpha = np.ones_like(img)[:,:,0]*opacity
+
+    mask_sum = np.zeros_like(img)[:,:,0]
+    for i,mask in enumerate(masks):
+        mask_sum = np.maximum(mask_sum,mask*(i+1)) #layer masks
+    if not BG_MASK: alpha[np.where(mask_sum==0)] = 0
+    else: alpha[np.where(mask_sum==0)] = opacity/2
+    plt.imshow(mask_sum, cmap=cmap, alpha=alpha) #TODO:  show just the masked part with color and not the rest?
+
+    plt.show()
 
 
 #image crops, does not show anything, just returns crops

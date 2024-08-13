@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 def get_coco_boxes(metadata):
     '''
@@ -9,6 +10,7 @@ def get_coco_boxes(metadata):
     for ann in metadata:
         box=box_coco_to_sam(ann['bbox'])
         boxes.append(box)
+
     return boxes
 
 def get_coco_masks(metadata:dict,api_class):
@@ -22,6 +24,21 @@ def get_coco_masks(metadata:dict,api_class):
         masks.append(mask)
 
     return masks
+    
+def coco_masks_boxes(metadata,api_class):
+    '''
+    Takes the COCO metadata and returns the segmentation masks and boxes in one run-through. 
+    for one images
+    '''
+    boxes=[]
+    masks=[]
+    for ann in metadata:
+        box=box_coco_to_sam(ann['bbox'])
+        boxes.append(box)
+        mask = api_class.annToMask(ann)
+        masks.append(mask)
+    
+    return masks,boxes
 
 def get_IoU_masks(gt_mask,mask):
     ''' 
@@ -40,6 +57,16 @@ def box_coco_to_sam(coco_box):
     from x0,y0,w,h to x0,y0,x1,y1
     '''
     return coco_box[0],coco_box[1],coco_box[0]+coco_box[2],coco_box[1]+coco_box[3]
+
+def boxes_coco_to_sam(coco_boxes):
+    '''
+    Convert coco boxes to sam boxes
+    from x0,y0,w,h to x0,y0,x1,y1
+    '''
+    sam_boxes=[]
+    for box in coco_boxes:
+        sam_boxes.append(box_coco_to_sam(box))
+    return sam_boxes
 
 def get_middle_point(box):
     '''
