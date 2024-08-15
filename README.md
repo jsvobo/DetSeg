@@ -64,8 +64,7 @@ This repository is for exploration of different object detection and segmentatio
         conda activate detect_env
         conda install python=3.11 pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia 
         pip install -r ./requirements.txt 
-    
-        mkdir datasets
+
 
     Copy/link coco to datasets/ folder ()
         cp location ./datasets/
