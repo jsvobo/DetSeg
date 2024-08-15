@@ -13,15 +13,11 @@ def prepare_sam(device, model="b"):
     # sam_vit_h_4b8939.pth
     # vit_h
     if model == "b":  # TODO: dict and not like this
-        sam_checkpoint = (
-            "/datagrid/personal/janoukl1/out/ImDec/ckpts/sam_vit_b_01ec64.pth"
-        )
+        sam_checkpoint = "/mnt/vrg2/imdec/models/sam1/sam_vit_b_01ec64.pth"
         model_type = "vit_b"
 
     elif model == "h":
-        sam_checkpoint = (
-            "/datagrid/personal/janoukl1/out/ImDec/ckpts/sam_vit_h_4b8939.pth"
-        )
+        sam_checkpoint = "/mnt/vrg2/imdec/models/sam1/sam_vit_h_4b8939.pth"
         model_type = "vit_h"
 
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)

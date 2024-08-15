@@ -52,8 +52,11 @@ def get_IoU_masks(gt_mask, mask):
         library = np
     else:
         library = torch
+
     intersection = library.sum((1 * gt_mask + 1 * mask) == 2)
     union = library.sum((1 * gt_mask + 1 * mask) != 0)
+    if union == 0:
+        return 0
     IoU = intersection / union
 
     return IoU

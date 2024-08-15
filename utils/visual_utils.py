@@ -72,14 +72,14 @@ def plot_box(box, ax, color="red", linewidth=2):
     )
 
 
-def print_masks_boxes(masks, boxes, img):
+def print_masks_boxes(masks, boxes, img, linewidth=3):
     """
     bounding boxes in format x0,y0,x1,y1 (main diagonal points)
     rints all masks and boxes on the image
     """
     scale = 8
     opacity = 0.8
-    box_width = 3
+    box_width = linewidth
     BG_MASK = False
 
     assert len(masks) == len(boxes)

@@ -11,11 +11,13 @@ from segment_anything import SamPredictor, sam_model_registry
 from segment_anything.utils.transforms import ResizeLongestSide  # for batching
 
 
-batch_size = 5  # 5-10_500
-num_workers = 4
-shuffle = True
-batch_max = 8_500
+batch_size = 6
+# 9 for A100 huge,
+# 4 for ada huge, 6 for RTX 4000 base
 
+num_workers = 4
+shuffle = False
+batch_max = 1250  # 8*625 = 5000
 
 # load coco
 coco = CocoLoader()
@@ -92,19 +94,22 @@ for i, batch in enumerate(data_loader):
         arange = torch.arange(best.shape[0])
         best_masks = dict_output["masks"][arange, best]  # take best mask for each box
 
-        dataset_IoU.update(best_masks.cpu(), torch.Tensor(gt_masks[j]))  # both on cpu?
+        iou_torch = dataset_IoU.forward(
+            best_masks.cpu(), torch.Tensor(gt_masks[j])
+        )  # both on cpu?
         # calculate overlap with GT mask
         # save to thresholds
+        print(
+            best_masks.cpu().shape, gt_masks[j].shape, torch.Tensor(gt_masks[j]).shape
+        )
         overlaps = utils.get_IoU_multiple(best_masks.cpu(), gt_masks[j])
         thresholds.extend(overlaps)
 
-    if i >= batch_max:  # just few batches for now, print final IoU
-        print("Mean IoU: " + str(dataset_IoU.compute()))
-
-        # flatten and to .npy, save to file
-
-        filename = f"./out/coco_thresholds_{len(thresholds)}.npy"
-        # save to a file
-        with open(filename, "wb") as f:
-            np.save(f, np.array(thresholds))
+    if i >= batch_max:  # where batch limit?
         break
+
+print("Mean IoU: " + str(dataset_IoU.compute()))
+filename = f"./out/coco_base_thresholds_{len(thresholds)}.npy"
+# save to a file
+with open(filename, "wb") as f:
+    np.save(f, np.array(thresholds))
