@@ -1,146 +1,100 @@
 import torch
 import os
+import numpy as np
 import torchvision.datasets
 from torchvision.datasets import CocoDetection
+from torchvision.transforms.functional import pil_to_tensor
 import pycocotools
 
 
-class CocoLoader:
+import utils  # otherwise does not work form main repo
+
+
+def get_coco_split(split: str = "train", year: str = "2017"):
     """
-    Class that handles coco dataset loading, works with the original coco API (pycocotools) and torch interface
-
-    based on dataset directory, directory of the dataset itself, year (2014 or 2017) and type of annotation (instances, captions, person_keypoints),
-    the DatasetCOCO class will extract the data and masks through the API class and torch interface
-
-    returned instances: torch dataset, pycocotools API class (which is used for parsing masks and annotations)
+    Returns the paths of the COCO dataset split for a given year.
+    Args:
+        split (str, optional): The split of the dataset. Defaults to "train".
+        year (str, optional): The year of the dataset. Defaults to "2017".
+    Returns:
+        tuple: A tuple containing the image path and annotation path.
     """
 
-    def __init__(self, config=None):
-        if config == None:
-            self.datasets_dir = "datasets"
-            self.subdir = "COCO"
-            self.year = "2017"
-            self.type_ann = "instances"
-        else:
-            # TODO: parse config? maybe from a file? hydra?
-            pass
+    assert split in ["train", "val"]
+    assert year in ["2014", "2017"]
 
-        self._parse_paths()
+    root = "./datasets/COCO"  # load from conf??
+    annotation_path = os.path.join(root, "annotations")
+    type_ann = "instances"  # instances, captions, person_keypoints
 
-    def _parse_paths(self):
-        """
-        Parses the paths to the dataset and annotations.
-        Coco dataset has a specific structure, so the paths are hardcoded.
-        test does NOT have annotations, and is for internal evaluation of coco challenges.
+    ann_path = os.path.join(annotation_path, type_ann + "_" + split + year + ".json")
+    image_path = os.path.join(root, split + year)
+    return (image_path, ann_path)
 
-        Only train and val have annotations!
-        """
 
-        path_images = os.path.join(self.datasets_dir, self.subdir)
-        path_annotations = os.path.join(self.datasets_dir, self.subdir, "annotations")
+class CocoLoader(CocoDetection):
 
-        self.train = os.path.join(path_images, "train" + self.year)
-        self.test = os.path.join(path_images, "test" + self.year)
-        self.val = os.path.join(path_images, "val" + self.year)
-
-        self.ann_train = os.path.join(
-            path_annotations, self.type_ann + "_train" + self.year + ".json"
-        )
-        self.ann_val = os.path.join(
-            path_annotations, self.type_ann + "_val" + self.year + ".json"
-        )
-        self.ann_test = os.path.join(
-            path_annotations, "image_info" + "_test" + self.year + ".json"
+    def __init__(self, filepaths, transform=None):
+        super(CocoLoader, self).__init__(
+            filepaths[0],
+            filepaths[1],
+            transform=transform,
         )
 
-        self.train_info = {"root": self.train, "annFile": self.ann_train}
-        self.val_info = {"root": self.val, "annFile": self.ann_val}
-        self.test_info = {"root": self.test, "annFile": self.ann_test}
+    def get_api(self):
+        return self.coco
 
-    def _load(self, info: dict, transformations: list = None):
-        """
-        info = {"root": path to the dataset, "annFile": path to the annotation file}  -> specifies the dataset and annotation file to load
-        Loading the annotation two times. one time for torch interface and one time for pycocotools API class
-        TODO: check if this is the best way to do it
-        """
+    def decode_ann(self, ann):
+        return self.coco.annToMask(ann)
 
-        dataset = torchvision.datasets.CocoDetection(  # torch interface class
-            root=info["root"], annFile=info["annFile"], transform=transformations
-        )
+    def get_amount(self, amount, offset=0):
+        assert offset >= 0
+        assert amount > 0
+        return [self[offset + i] for i in range(amount)]
 
-        api_class = dataset.coco  # pycocotools API class
+    def __getitem__(self, index):
+        item = super(CocoLoader, self).__getitem__(index)
+        img = item[0]
+        annotations = item[1]
 
-        return dataset, api_class
+        boxes = []
+        masks = []
+        cats = []
+        for ann in annotations:
+            box = utils.box_coco_to_sam(ann["bbox"])
+            boxes.append(box)
+            mask = self.decode_ann(ann)
+            masks.append(mask)
+            cats.append(ann["category_id"])
 
-    def blank_api(self):
-        return pycocotools.coco.COCO()
-
-    def load_train(self, transformations: list = None):
-        """
-        Loads the COCO train dataset.
-        Args:
-            transformations (list, optional): A list of transformations to apply to the dataset. Defaults to None.
-        Returns:
-            train data loader, dataset and the COCO API class.
-        """
-        return self._load(self.train_info, transformations)
-
-    def load_val(self, transformations: list = None):
-        """
-        Loads the COCO validation dataset.
-        Args:
-            transformations (list, optional): A list of transformations to apply to the dataset. Defaults to None.
-        Returns:
-            val data loader, dataset and the COCO API class.
-        """
-        return self._load(self.val_info, transformations)
-
-    def load_test(self, transformations: list = None):
-        """
-        Loads the COCO test dataset.
-        Args:
-            transformations (list, optional): A list of transformations to apply to the dataset. Defaults to None.
-        Returns:
-            test data loader, dataset and the COCO API class.
-        """
-        return self._load(self.test_info, transformations)
-
-    def load_all(self, transformations: list = None):
-        """
-        Load the COCO dataset.
-        Returns training, testing, and validation datasets,
-        as well as API classes for each of them in a dictionary.
-        Args:
-            transformations (list, optional): A list of transformations to apply to the dataset. Defaults to None.
-        Returns:
-            A dictionary containing the loaders, datasets, and API classes for each split.
-        """
-
-        train_dataset, train_annotations = self.load_train(transformations)
-        val_dataset, val_annotations = self.load_val(transformations)
-        test_dataset, test_annotations = self.load_test(transformations)
+        boxes = np.array(boxes)
+        masks = np.array(masks)
 
         return {
-            "test": {"dataset": test_dataset, "annotations": test_annotations},
-            "train": {"dataset": train_dataset, "annotations": train_annotations},
-            "val": {"dataset": val_dataset, "annotations": val_annotations},
+            "image": pil_to_tensor(img),
+            "annotations": (
+                {
+                    "boxes": torch.Tensor(boxes),
+                    "masks": torch.Tensor(masks),
+                    "categories": torch.Tensor(cats),
+                }
+            ),
         }
+
+    def translate_catIDs(self, catIDs):
+        return [self.coco.cats[int(catID)]["name"] for catID in catIDs]
 
 
 def test_coco_loading():
     print("\nTesting coco loading")
-    coco = CocoLoader()
 
-    loader, dataset, annotations = coco.load_train()
-    cats = annotations.loadCats(annotations.getCatIds())
-
-    loader, dataset, annotations = coco.load_val()
-
-    cats = annotations.loadCats(annotations.getCatIds())
-
-    loader, dataset, annotations = coco.load_test()
-
-    cats = annotations.loadCats(annotations.getCatIds())
+    paths = get_coco_split("train", "2017")
+    coco = CocoLoader(paths, transform=None)
+    item = coco[0]
+    assert item["image"].shape[1:] == item["annotations"]["masks"].shape[1:]
+    assert item["image"].shape[0] == 3
+    assert len(coco.get_amount(10)) == 10
+    print(coco.translate_catIDs([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
 
 
 if __name__ == "__main__":
