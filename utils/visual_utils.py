@@ -61,19 +61,6 @@ def show_points(coords, labels, ax, marker_size=300):
     )
 
 
-def plot_box(box, ax, color="red", linewidth=2):
-    """
-    bounding boxes in format x0,y0,x1,y1 (main diagonal points)
-    Plots the boc on the ax from plt
-    """
-    ax.plot(
-        [box[0], box[2], box[2], box[0], box[0]],
-        [box[1], box[1], box[3], box[3], box[1]],
-        color=color,
-        linewidth=linewidth,
-    )
-
-
 def crop_xyxy(img, mask, box, crop_box):
     """
     Input:
@@ -87,7 +74,7 @@ def crop_xyxy(img, mask, box, crop_box):
     Crop the image mask and bounding box, starting at coords x0,y0 at the left upper corner
     w,h sets the size of the resulting window
     """
-    img = utils.to_plt(img)
+    img = utils.to_plt_order(img)
     crop_box = np.int32(crop_box)  # to int
     x0, y0, x1, y1 = crop_box[0], crop_box[1], crop_box[2], crop_box[3]
 
