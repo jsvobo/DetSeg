@@ -3,6 +3,8 @@ import torch
 import numpy as np
 import utils
 from matplotlib import colormaps
+from matplotlib.colors import ListedColormap
+import matplotlib.patches as mpatches
 
 
 global_titlesize = 15  # dont touch? not important
@@ -43,9 +45,18 @@ def plot_box(box, ax, color="red", linewidth=2):
     )
 
 
-def grid_masks_boxes(image, masks, boxes, titles=None, scale=8, linewidth=3):
+def grid_masks_boxes(
+    image,
+    masks,
+    boxes,
+    titles=None,
+    scale=8,
+    linewidth=3,
+    points=None,
+    point_labels=None,
+):
     num_imgs = len(masks) + 1
-    image = to_plt_order(image)  # reorders image to HWC from torch CHW and moves to cpu
+    image = utils.to_plt_order(image)  # reorders image to HWC from torch CHW
     fig, axes = plt.subplots(1, num_imgs, figsize=(num_imgs * scale, scale))
     axes = axes.flatten()
 
@@ -60,8 +71,17 @@ def grid_masks_boxes(image, masks, boxes, titles=None, scale=8, linewidth=3):
         ax.axis("off")
         ax.imshow(image)
         ax.set_title(titles[index], fontsize=global_titlesize)
-        ax.imshow(masks[index], cmap="jet", alpha=0.5)
+
+        if points is not None:
+            assert len(points) == len(point_labels)
+            if points[index] is not None:
+                utils.show_points(
+                    coords=points[index], labels=point_labels[index], ax=ax
+                )
+
         utils.plot_box(boxes[index], ax, linewidth=linewidth)
+        ax.imshow(1 * masks[index], cmap="jet", alpha=0.5)
+        # plot this last so the bbox is on top of the mask and not in the edges
 
     plt.show()
 
@@ -86,9 +106,10 @@ def print_masks_boxes(
     plt.imshow(image)  # first image
     plt.axis("off")
 
-    has_masks = (masks is not None) and masks != []
-    has_boxes = (boxes is not None) and boxes != []
+    has_masks = (masks is not None) and (len(masks) > 0)
+    has_boxes = (boxes is not None) and (len(boxes) > 0)
 
+    print(has_masks, has_boxes)
     if has_masks and has_boxes:  # I have both
         assert len(masks) == len(boxes)
 
@@ -110,4 +131,66 @@ def print_masks_boxes(
         for i, box in enumerate(boxes):  # all masks
             utils.plot_box(box, plt.gca(), linewidth=linewidth)
 
+    plt.show()
+
+
+# color list, patches and colormap definitions for mask visualisation, function show_differences()
+colors1 = ["blue", "red"]
+patches1 = [mpatches.Patch(color=c) for c in colors1]
+cmap1 = ListedColormap(colors1)
+labels1 = ["Background", "Mask"]
+
+colors2 = ["blue", "red", "yellow", "green"]
+patches2 = [mpatches.Patch(color=c) for c in colors2]
+cmap2 = ListedColormap(colors2)
+labels2 = ["Background", "Only inferred", "Only GT", "Intersection"]
+
+
+def show_differences(
+    dict_bad_mask,
+    scale=8,
+    linewidth=2,
+    gt_class=None,
+    title_size=22,
+    opacity=0.5,
+    segmentation_model="SAM-1",
+):
+    # load from dict
+    image = utils.to_plt_order(dict_bad_mask["image"])
+    box = dict_bad_mask["box"]
+    inferred_mask = dict_bad_mask["inferred_mask"]
+    gt_mask = dict_bad_mask["gt_mask"]
+
+    # listing for every picture, first is just the image
+    cmaps = [cmap1, cmap1, cmap2]
+    patches = [patches1, patches1, patches2]
+    labels = [labels1, labels1, labels2]
+    ncols = [1, 1, 2]
+    titles = ["GT", segmentation_model, "Overlapping masks"]
+
+    if gt_class is not None:
+        # change titles to include the gt class names
+        titles[0] = "GT: " + gt_class
+
+    # Base image
+    fig, axes = plt.subplots(1, 4, figsize=(4 * scale, scale))
+    ax = axes[0]
+    utils.plot_box(box, ax, color="red", linewidth=linewidth)
+    ax.imshow(image)
+    ax.axis("off")
+    ax.set_title("Base image", fontsize=title_size)
+
+    # Image with masks (GT,Inferred, Overlapping)
+    both_masks = np.int64(inferred_mask) + 2 * np.int64(gt_mask)  # adds layers
+    masks_to_show = [gt_mask, inferred_mask, both_masks]
+    for i in range(3):
+        ax = axes[i + 1]
+        ax.imshow(image)
+        ax.axis("off")
+        ax.set_title(titles[i], fontsize=title_size)
+        utils.plot_box(box, ax)
+        ax.imshow(masks_to_show[i], cmap=cmaps[i], alpha=opacity)
+        ax.legend(patches[i], labels[i], ncols=ncols[i], fontsize="x-large")
+
+    fig.tight_layout(rect=[0, 0, 0.95, 0.95])
     plt.show()

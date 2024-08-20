@@ -39,8 +39,9 @@ def show_points(coords, labels, ax, marker_size=300):
     """
     Interpreted from https://github.com/facebookresearch/segment-anything
     """
-    pos_points = coords[labels == 1]
-    neg_points = coords[labels == 0]
+    pos_points = coords[np.where(labels == 1)]
+    neg_points = coords[np.where(labels == 0)]
+
     ax.scatter(
         pos_points[:, 0],
         pos_points[:, 1],
@@ -50,6 +51,7 @@ def show_points(coords, labels, ax, marker_size=300):
         edgecolor="white",
         linewidth=1.25,
     )
+
     ax.scatter(
         neg_points[:, 0],
         neg_points[:, 1],
