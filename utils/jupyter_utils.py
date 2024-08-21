@@ -32,6 +32,34 @@ def to_torch_order(image: torch.Tensor):
     return image.permute(2, 0, 1).cpu()
 
 
+def show_points(coords, labels, ax, marker_size=300):
+    """
+    Interpreted from https://github.com/facebookresearch/segment-anything
+    """
+    pos_points = coords[np.where(labels == 1)]
+    neg_points = coords[np.where(labels == 0)]
+
+    ax.scatter(
+        pos_points[:, 0],
+        pos_points[:, 1],
+        color="green",
+        marker="*",
+        s=marker_size,
+        edgecolor="white",
+        linewidth=1.25,
+    )
+
+    ax.scatter(
+        neg_points[:, 0],
+        neg_points[:, 1],
+        color="red",
+        marker="*",
+        s=marker_size,
+        edgecolor="white",
+        linewidth=1.25,
+    )
+
+
 def plot_box(box, ax, color="red", linewidth=2):
     """
     bounding boxes in format x0,y0,x1,y1 (main diagonal points)
@@ -109,7 +137,6 @@ def print_masks_boxes(
     has_masks = (masks is not None) and (len(masks) > 0)
     has_boxes = (boxes is not None) and (len(boxes) > 0)
 
-    print(has_masks, has_boxes)
     if has_masks and has_boxes:  # I have both
         assert len(masks) == len(boxes)
 

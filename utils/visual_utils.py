@@ -7,20 +7,6 @@ from PIL import Image
 import utils
 
 
-# color list, patches and colormap definitions for mask visualisation (sam.ipynb)
-colors_together = ["blue", "red", "yellow", "green"]
-patches_together = [
-    mpatches.Patch(color=colors_together[i]) for i in range(len(colors_together))
-]
-cmap_together = ListedColormap(colors_together)
-
-colors_separate = ["blue", "red"]
-patches_separate = [
-    mpatches.Patch(color=colors_separate[i]) for i in range(len(colors_separate))
-]
-cmap_single = ListedColormap(colors_separate)
-
-
 # functions for plotting masks, bboxes, images and alike
 def show_mask(mask, ax, random_color=False):
     """

@@ -5,7 +5,7 @@ import torchvision.datasets
 from torchvision.datasets import CocoDetection
 from torchvision.transforms.functional import pil_to_tensor
 import pycocotools
-
+from torch.utils.data import DataLoader
 
 import utils  # otherwise does not work form main repo
 
@@ -84,6 +84,25 @@ class CocoLoader(CocoDetection):
     def translate_catIDs(self, catIDs):
         return [self.coco.cats[int(catID)]["name"] for catID in catIDs]
 
+    def instantiate_loader(self, batch_size=4, num_workers=4):
+
+        def collate_fn(batch):
+            images = [item["image"] for item in batch]
+            annotations = [item["annotations"] for item in batch]
+            return images, annotations
+
+        data_loader = DataLoader(
+            self,
+            batch_size=batch_size,
+            shuffle=False,  # dont mix pls. we then save the positions
+            num_workers=num_workers,
+            collate_fn=collate_fn,
+        )
+        return data_loader
+
+    def get_classes(self):
+        return [self.coco.cats[int(catID)]["name"] for catID in self.coco.cats.keys()]
+
 
 def test_coco_loading():
     print("\nTesting coco loading")
@@ -96,6 +115,9 @@ def test_coco_loading():
     assert len(coco.get_amount(10)) == 10
     print(coco.translate_catIDs([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
 
+    print(coco.get_classes())
+
 
 if __name__ == "__main__":
     test_coco_loading()
+    # if promblem, run as python -m datasets.dataset_loading

@@ -44,6 +44,8 @@ def _infer_masks_single_image(
     # how many prompt sets are there??
     if has_boxes:
         len_prompts = len(boxes)
+        if len_prompts == 0:  # boxes, but empty (some images don't have boxes)
+            return {"masks": [], "scores": []}
     else:
         len_prompts = len(point_coords)
 
