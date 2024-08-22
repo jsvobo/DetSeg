@@ -1,3 +1,8 @@
+import torch
+
+# utils for batching in sam1_wrapper.py
+
+
 def _prepare_image_for_batch(device, image, resize_transform):
     """
     Prepare the image for batch processing

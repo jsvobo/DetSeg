@@ -10,28 +10,6 @@ import matplotlib.patches as mpatches
 global_titlesize = 15  # dont touch? not important
 
 
-def to_plt_order(image: torch.Tensor):
-    """
-    Reshape a torch tensor (chw) to order hwc for matplotlib plotting.
-    Args:
-        torch.Tensor: Input image tensor in chw format on CPU.
-    Returns:
-        image (torch.Tensor): Reshaped image tensor in hwc format.
-    """
-    return image.permute(1, 2, 0).cpu()
-
-
-def to_torch_order(image: torch.Tensor):
-    """
-    Reshape hwc array to chw for torch calculations.
-    Args:
-        image (torch.Tensor): Input image tensor in hwc format.
-    Returns:
-        torch.Tensor: Reshaped image tensor in chw format on CPU.
-    """
-    return image.permute(2, 0, 1).cpu()
-
-
 def show_points(coords, labels, ax, marker_size=300):
     """
     Interpreted from https://github.com/facebookresearch/segment-anything
@@ -84,7 +62,6 @@ def grid_masks_boxes(
     point_labels=None,
 ):
     num_imgs = len(masks) + 1
-    image = utils.to_plt_order(image)  # reorders image to HWC from torch CHW
     fig, axes = plt.subplots(1, num_imgs, figsize=(num_imgs * scale, scale))
     axes = axes.flatten()
 
@@ -129,7 +106,6 @@ def print_masks_boxes(
     prints all masks and boxes on the image
     if None is provided, no boxes are printed, same for masks
     """
-    image = to_plt_order(image)
     plt.figure(figsize=(scale, scale))
     plt.imshow(image)  # first image
     plt.axis("off")
@@ -183,7 +159,7 @@ def show_differences(
     segmentation_model="SAM-1",
 ):
     # load from dict
-    image = utils.to_plt_order(dict_bad_mask["image"])
+    image = dict_bad_mask["image"]
     box = dict_bad_mask["box"]
     inferred_mask = dict_bad_mask["inferred_mask"]
     gt_mask = dict_bad_mask["gt_mask"]

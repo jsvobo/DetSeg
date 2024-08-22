@@ -64,14 +64,14 @@ class CocoLoader(CocoDetection):
             box = utils.box_coco_to_sam(ann["bbox"])
             boxes.append(box)
             mask = self.decode_ann(ann)
-            masks.append(mask)
+            masks.append(np.uint8(mask))
             cats.append(ann["category_id"])
 
         boxes = np.array(boxes)
         masks = np.array(masks)
 
         return {
-            "image": pil_to_tensor(img),
+            "image": np.asarray(img),
             "annotations": (
                 {
                     "boxes": torch.Tensor(boxes),
@@ -107,17 +107,19 @@ class CocoLoader(CocoDetection):
 def test_coco_loading():
     print("\nTesting coco loading")
 
-    paths = get_coco_split("train", "2017")
+    paths = get_coco_split("val", "2017")
     coco = CocoLoader(paths, transform=None)
-    item = coco[0]
-    assert item["image"].shape[1:] == item["annotations"]["masks"].shape[1:]
-    assert item["image"].shape[0] == 3
-    assert len(coco.get_amount(10)) == 10
-    print(coco.translate_catIDs([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
 
+    item = coco[0]
+    assert item["image"].shape[:2] == item["annotations"]["masks"].shape[1:]
+    assert item["image"].shape[2] == 3
+    assert len(coco.get_amount(10)) == 10
+
+    print("\n")
+    print(coco.translate_catIDs([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
     print(coco.get_classes())
 
 
 if __name__ == "__main__":
     test_coco_loading()
-    # if promblem, run as python -m datasets.dataset_loading
+    # if problem, run as python -m datasets.dataset_loading

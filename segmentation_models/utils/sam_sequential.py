@@ -51,8 +51,7 @@ def _infer_masks_single_image(
 
     inferred_masks = []
     mask_scores = []
-    image_reshaped = utils.to_plt_order(image)  # CHW to HWC if not np
-    sam_predictor.set_image(np.array(image_reshaped))
+    sam_predictor.set_image(np.array(image))
 
     for i in range(len_prompts):
         points = point_coords[i] if has_points else None
