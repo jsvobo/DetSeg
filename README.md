@@ -14,7 +14,8 @@ This repository is for exploration of different object detection and segmentatio
         SAM-1 (downloaded by pip)
 
 ### Code structure, main modules:
-    evaluator.py - main pipeline class. when run directly, evaluates the pipeline
+    pipeline.py - main pipeline class. when run directly, evaluates the pipeline loaded from config
+    evaluator.py - contains evaluator class used in the pipeline. can be also run directly
     sam.ipynb - sam sequential inference on images, visuals of masks etc.
     coco_visuals.ipynb - notebook working with coco dataset
     IoU_recall_visuals - loads saved IoU values and produces histograms etc.
