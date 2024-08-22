@@ -78,3 +78,6 @@ def crop_xyxy(img, mask, box, crop_box):
     cropped_mask = mask[y0:y1, x0:x1]  # need to also crop the w,h
 
     return cropped_img, cropped_mask, box_coords
+
+
+# TODO: helper save/ load functions to use in evaluator, pipeline or notebooks
