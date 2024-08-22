@@ -134,7 +134,8 @@ class Evaluator:
         Raises:
             None
         """
-        # TODO: append IoU somewhere, boxes, masks, metadata, save into file?
+        box_IoUs = []
+        mask_IoUs = []
 
         # if classes are needed for detection (DINO etc.)
         classes = data_loader.dataset.get_classes()
@@ -159,7 +160,7 @@ class Evaluator:
                 selected_boxes = self.box_matching(
                     gt_boxes_list=gt_boxes, detected_boxes_list=detected_boxes
                 )
-            else:  # default
+            else:  # default, take all boxes? breaks individual jaccard index
                 selected_boxes = gt_boxes
 
             # batch detection metrics
@@ -170,7 +171,7 @@ class Evaluator:
                 )
 
             # can do box transforms here
-            if boxes_transform is not None:
+            if self.boxes_transform is not None:
                 detected_boxes = boxes_transform(detected_boxes)
 
             # segment, calculater batch and then pairwise metrics
@@ -199,7 +200,7 @@ class Evaluator:
                         ):
                             self.seg_pairwise_metrics.update(inferred, gt)
 
-        # TODO: save something needed? individual IoUs, metadata, some images, idices?
+        return box_IoUs, mask_IoUs
 
 
 def test_evaluator():
@@ -215,7 +216,7 @@ if __name__ == "__main__":
     max_batch = 10  # early cutoff for testing
 
     detector = detection_models.GTboxDetector()
-    # or detection_models.GTboxDetectorMiddle()
+    # or detector = detection_models.GTboxDetectorMiddle()
 
     # load coco dataset
     coco_val_dataset = CocoLoader(get_coco_split(split=split), transform=None)
@@ -268,7 +269,7 @@ if __name__ == "__main__":
     )
 
     # run the evaluation
-    evaluator.evaluate(data_loader, max_batch=max_batch)
+    box_IoUs, mask_IoUs = evaluator.evaluate(data_loader, max_batch=max_batch)
 
     # print results
     print("\n\n")

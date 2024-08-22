@@ -16,16 +16,19 @@ class BaseSegmentWrapper:
 
     def infer_masks(self, items, boxes=None, points=None, point_labels=None):
         """
-        Infers masks for the given items.
-        Args:
-            items (list): A list of items for which masks need to be inferred.
-            boxes (list, optional): A list of bounding boxes corresponding to the items. Defaults to None.
-            points (list, optional): A list of points corresponding to the items. Defaults to None.
-            point_labels (list, optional): A list of labels for the points. Defaults to None.
-        Returns:
-            List of dicts containing masks and their scores
+        Does not use batching, sequentially processes the images, returns list of dicts
+            Each dict has masks and their scores for one image
 
-        Sequentially processes the images, returns list of dicts
+        Args:
+            items (list): List of dicts with images and GT annotations
+            boxes (list): List of bounding boxes for prompting, Optional, then use GT boxes
+            points (list, optional): List of point coordinates for prompting. Defaults to None.
+            point_labels (list, optional): List of point labels for prompting. Defaults to None.
+
+        Returns:
+            dict: A dictionary containing the inferred masks and their scores.
+                - "masks" (list): List of inferred masks.
+                - "scores" (list): List of mask scores.
         """
         pass
 

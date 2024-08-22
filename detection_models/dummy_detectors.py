@@ -38,6 +38,6 @@ class GTboxDetectorMiddle(DummyDetectorBase):
         points = []
         prompts = []
         for boxes in results:  # not batching, sequentially load and middles
-            points.append([utils.get_middle_point(box) for box in boxes])  # [[x,y],...]
-            prompts.append([[1] for box in boxes])  # [[1],[1],...]
+            [points.append([utils.get_middle_point(box) for box in boxes])]
+            [prompts.append([1 for box in boxes])]
         return results, points, prompts

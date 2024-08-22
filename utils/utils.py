@@ -8,8 +8,8 @@ def get_IoU_masks(gt_mask, mask):
     Compute IoU between 2 masks
     """
 
-    intersection = torch.sum(gt_mask and mask)
-    union = torch.sum(gt_mask or mask)
+    intersection = torch.sum(torch.logical_and(gt_mask, mask))
+    union = torch.sum(torch.logical_or(gt_mask, mask))
 
     return 0 if union == 0 else (intersection / union)
 
@@ -79,5 +79,12 @@ def crop_xyxy(img, mask, box, crop_box):
 
     return cropped_img, cropped_mask, box_coords
 
+    # TODO: helper save/ load functions to use in evaluator, pipeline or notebooks
 
-# TODO: helper save/ load functions to use in evaluator, pipeline or notebooks
+    """ 
+    print("Mean IoU: " + str(dataset_IoU.compute()))
+    filename = f"./out/coco_base_thresholds_{len(thresholds)}.npy"
+    # save to a file
+    with open(filename, "wb") as f:
+        np.save(f, np.array(thresholds))
+    """

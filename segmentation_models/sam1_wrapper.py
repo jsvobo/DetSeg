@@ -21,21 +21,7 @@ class SamWrapper(BaseSegmentWrapper):
         self.resize_transform = ResizeLongestSide(self.get_image_size())
 
     def infer_masks(self, items, boxes=None, points=None, point_labels=None):
-        """
-        Does not use batching, sequentially processes the images, returns list of dicts
-            Each dict has masks and their scores for one image
 
-        Args:
-            items (list): List of dicts with images and GT annotations
-            boxes (list): List of bounding boxes for prompting, Optional, then use GT boxes
-            points (list, optional): List of point coordinates for prompting. Defaults to None.
-            point_labels (list, optional): List of point labels for prompting. Defaults to None.
-
-        Returns:
-            dict: A dictionary containing the inferred masks and their scores.
-                - "masks" (list): List of inferred masks.
-                - "scores" (list): List of mask scores.
-        """
         has_labels = point_labels is not None
         has_points = points is not None
         has_boxes = boxes is not None
@@ -68,7 +54,7 @@ class SamWrapper(BaseSegmentWrapper):
         resulting_masks = []
         index_list = []
 
-        # prepare sam_batched_inputs
+        # prepare sam_batched_inputs based on prompts
         for j in range(len(images)):
             img = images[j]
             boxes_for_image = boxes[j]
@@ -77,38 +63,46 @@ class SamWrapper(BaseSegmentWrapper):
             if len(boxes_for_image) == 0:
                 continue  # no boxes in image
 
+            original_size = img.shape[:2]
             dict_img = {  # written according to official sam notebook predictor.ipynb
                 "image": sam_batching._prepare_image_for_batch(
                     image=img,
                     resize_transform=self.resize_transform,
-                    device=self.sam.device,
+                    device=self.device,
                 ),
                 "boxes": self.resize_transform.apply_boxes_torch(
-                    boxes_for_image.to(self.sam.device), img.shape[:2]
+                    boxes_for_image.to(self.device), original_size
                 ),
-                "original_size": img.shape[:2],
+                "original_size": original_size,
             }
+
+            if point_coords is not None:
+                # reshape to correct format BxNx2 and BxN
+                coords = torch.Tensor([point_coords[j]])
+                points_for_image = coords.permute(1, 0, 2).to(self.device)
+                labels = torch.Tensor([point_labels[j]])
+                labels_for_image = labels.T.to(self.device)
+
+                # add to dict
+                dict_img["point_coords"] = self.resize_transform.apply_coords_torch(
+                    points_for_image, original_size
+                )
+                dict_img["point_labels"] = labels_for_image
+
             sam_batched_inputs.append(dict_img)
             index_list.append(j)
 
-        # batch inference
+        # None came through
         if sam_batched_inputs == []:
-            return resulting_masks  # [[], [], ...]
+            return resulting_masks  # [[], [], ...] at this point
 
+        # batch inference
         batched_output = self.sam(sam_batched_inputs, multimask_output=True)
+        results = sam_batching._select_best_masks(
+            batched_output, resulting_masks, index_list
+        )
 
-        # dict_keys(['masks', 'iou_predictions', 'low_res_logits'])
-        for j, dict_output in enumerate(batched_output):
-            pred_quality = dict_output["iou_predictions"]
-            best = np.argmax(pred_quality.cpu(), axis=1)
-
-            arange = torch.arange(best.shape[0])
-            best_masks = dict_output["masks"][arange, best]
-            resulting_masks[index_list[j]] = best_masks
-
-            # use index_list to map back to original image ordereven with missing images
-
-        return resulting_masks
+        return results
 
 
 class AutomaticSam(SamAutomaticMaskGenerator):
@@ -117,7 +111,7 @@ class AutomaticSam(SamAutomaticMaskGenerator):
         super().__init__(*args, **kwargs)
 
     def automatic_one_image(self, image, mask_generator):
-        masks_dicts = mask_generator.generate(image)
+        masks_dicts = self.mask_generator.generate(image)
 
         detected_boxes = []
         detected_masks = []
@@ -133,13 +127,11 @@ class AutomaticSam(SamAutomaticMaskGenerator):
 
         return detected_boxes, detected_masks, points  # for each image
 
-    def automatic_multiple_images(self, items, mask_generator):
+    def automatic_multiple_images(self, items):
         generated_masks_dicts = []
         for item in items:
             image = item["image"]
-            detected_boxes, detected_masks, points = self.automatic_one_image(
-                image, mask_generator
-            )
+            detected_boxes, detected_masks, points = self.automatic_one_image(image)
             generated_masks_dicts.append(
                 {"boxes": detected_boxes, "masks": detected_masks, "points": points}
             )
