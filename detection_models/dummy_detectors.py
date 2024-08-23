@@ -5,7 +5,7 @@ import numpy as np
 
 class BaseDetectorWrapper:
 
-    def detect_batch(self, images, metadata=None, classes=None):
+    def detect_batch(self, images, metadata, classes=None):
         raise NotImplementedError
 
 
@@ -21,8 +21,14 @@ class GTboxDetector(DummyDetectorBase):
     Dummy detector class, which just takes GT bboxes with no other prompts
     """
 
-    def detect_batch(self, images, metadata=None, classes=None):
-        return self.extract_GT_boxes(metadata), None, None
+    def detect_batch(self, images, metadata, classes=None):
+        results = self.extract_GT_boxes(metadata)
+        return (
+            results,  # the GT boxes extracted from metadata
+            None,  # no attention points
+            None,  # no point labels
+            [[0 for box in boxes] for boxes in results],  # returns all classes as 0,
+        )
         # gives no point labels or attention points, simply GT boxes
 
 
@@ -34,10 +40,13 @@ class GTboxDetectorMiddle(DummyDetectorBase):
 
     def detect_batch(self, images, metadata=None, classes=None):
         results = self.extract_GT_boxes(metadata)  # list of lists of boxes
+        classes = [
+            [0 for box in boxes] for boxes in results
+        ]  # returns all classes as 0
 
         points = []
         prompts = []
         for boxes in results:  # not batching, sequentially load and middles
             [points.append([utils.get_middle_point(box) for box in boxes])]
             [prompts.append([1 for box in boxes])]
-        return results, points, prompts
+        return results, points, prompts, classes

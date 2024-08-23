@@ -7,7 +7,20 @@ from torchvision.transforms.functional import pil_to_tensor
 import pycocotools
 from torch.utils.data import DataLoader
 
-import utils  # otherwise does not work form main repo
+import utils  # otherwise does not work from main repo
+
+
+def box_coco_to_sam(coco_box):
+    """
+    Convert coco box to sam box
+    from x0,y0,w,h to x0,y0,x1,y1
+    """
+    return (
+        round(coco_box[0]),
+        round(coco_box[1]),
+        round((coco_box[0] + coco_box[2])),
+        round((coco_box[1] + coco_box[3])),
+    )
 
 
 def get_coco_split(split: str = "train", year: str = "2017"):
@@ -61,7 +74,7 @@ class CocoLoader(CocoDetection):
         masks = []
         cats = []
         for ann in annotations:
-            box = utils.box_coco_to_sam(ann["bbox"])
+            box = box_coco_to_sam(ann["bbox"])
             boxes.append(box)
             mask = self.decode_ann(ann)
             masks.append(np.uint8(mask))
@@ -74,8 +87,10 @@ class CocoLoader(CocoDetection):
             "image": np.asarray(img),
             "annotations": (
                 {
-                    "boxes": torch.Tensor(boxes),
-                    "masks": torch.Tensor(masks),
+                    "boxes": torch.Tensor(boxes).type(
+                        torch.int16
+                    ),  # cant be uint8!! weird error with conversion
+                    "masks": torch.Tensor(masks).type(torch.uint8),
                     "categories": torch.Tensor(cats),
                 }
             ),

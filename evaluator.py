@@ -6,6 +6,7 @@ from torchmetrics.detection.iou import IntersectionOverUnion
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import numpy as np
 from tqdm import tqdm
+import math
 
 import utils  # contains sam_utils, visual_utils, and other utility functions
 from datasets.dataset_loading import CocoLoader, get_coco_split
@@ -14,7 +15,7 @@ import detection_models
 
 
 # helper functions for evaluator list of lists of boxs/masks -> list of dicts with boxes/masks
-def boxes_to_dict_map(list_of_list_of_boxes):
+def to_dict_map(list_of_list_of_boxes):
     """
     Convert a list of lists of boxes for one image into a list of dictionaries.
     Args:
@@ -25,9 +26,13 @@ def boxes_to_dict_map(list_of_list_of_boxes):
             - "labels": A tensor of zeros with the same length as the list of boxes.
             - "scores": A tensor of ones with the same length as the list of boxes.
     """
+    key_type = (
+        "boxes" if len(list_of_list_of_boxes[0][0]) == 4 else "masks"
+    )  # last dim is 4 -> boxes, else masks
+
     return [
         {
-            "boxes": list_of_boxes,
+            key_type: list_of_boxes,
             "labels": torch.zeros(len(list_of_boxes), dtype=torch.int32),
             "scores": torch.ones(len(list_of_boxes), dtype=torch.float32),
         }
@@ -35,25 +40,30 @@ def boxes_to_dict_map(list_of_list_of_boxes):
     ]
 
 
-def masks_to_dict_map(list_of_list_of_masks):
+def to_dict_map_classful(list_of_list_of_boxes, list_of_list_of_classes):
     """
-    Converts a list of lists of masks to a list of dictionaries.
+    Convert a list of lists of boxes for one image into a list of dictionaries.
     Args:
-        list_of_list_of_masks (list): A list of lists of masks.
+        list_of_list_of_boxes (list): A list of lists containing boxes for one image.
     Returns:
-        list: A list of dictionaries, where each dictionary contains the following keys:
-            - "masks": The masks converted to CPU.
-            - "labels": A tensor of zeros, since every object os of the same class for basic IoU.
-            - "scores": A tensor of ones with the length of the masks.
+        list: A list of dictionaries, where each dictionary represents a box with the following keys:
+            - "boxes": The list of boxes.
+            - "labels": A tensor of zeros with the same length as the list of boxes.
+            - "scores": A tensor of ones with the same length as the list of boxes.
     """
+    key_type = (
+        "boxes" if len(list_of_list_of_boxes[0][0]) == 4 else "masks"
+    )  # last dim is 4 -> boxes, else masks
 
     return [
         {
-            "masks": list_of_masks.to("cpu"),
-            "labels": torch.zeros(len(list_of_masks), dtype=torch.int32),
-            "scores": torch.ones(len(list_of_masks), dtype=torch.float32),
+            key_type: list_of_boxes,
+            "labels": torch.Tensor(list_of_classes).type(torch.int32),
+            "scores": torch.ones(len(list_of_boxes), dtype=torch.float32),
         }
-        for list_of_masks in list_of_list_of_masks
+        for list_of_boxes, list_of_classes in zip(
+            list_of_list_of_boxes, list_of_list_of_classes
+        )
     ]
 
 
@@ -100,25 +110,172 @@ class Evaluator:
     ):
         self.model_det = model_det
         self.model_seg = model_seg
-        self.det_batch_metrics = det_batch_metrics
-        self.seg_batch_metrics = seg_batch_metrics  # mAP, can be run on the batch
-        self.seg_pairwise_metrics = (
-            seg_pairwise_metrics  # matrix on mask-mask basis (Jaccard)
-        )
         self.boxes_transform = boxes_transform
-        self.box_matching = box_matching
         self.device = device
+
+        self.IoU_boxes = []
+        self.IoU_masks = []
+        self.evaluated = False
+
+        # pairwise metrics, wIoU
+        self.seg_IoU_metric = JaccardIndex("binary").to(device)
+        self.det_IoU_metric = JaccardIndex("binary").to(device)
+
+        # batch metrics, mAP, but CA/classless
+        self.det_map_classless = MeanAveragePrecision(
+            iou_type="bbox",
+            average="macro",
+            class_metrics=False,
+        )
+        self.seg_map_classless = MeanAveragePrecision(
+            iou_type="segm",
+            average="micro",
+            class_metrics=False,
+        )
+
+        # batch metrics, mAP, classful, per class, extended output
+        self.seg_batch_classful = MeanAveragePrecision(
+            iou_type="segm", average="micro", class_metrics=True, extended_summary=True
+        )
+        self.det_batch_classful = MeanAveragePrecision(
+            iou_type="bbox", average="macro", class_metrics=True, extended_summary=True
+        )
 
         # calculating something at all
         assert (model_seg is not None) or (model_det is not None)
 
-        # we want some metrics from segmentation, if we have a model there, otherwise we can skip
-        if model_seg is not None:
-            assert (seg_pairwise_metrics is not None) or (seg_batch_metrics is not None)
-
         # takes GT bboxes, need something for segmentation still
         if model_det is None:
             self.model_det = detection_models.GTboxDetector()
+            # default, just take GT boxes, all classes 0, no points
+
+    def matching(self, gt, inferred):
+        # TODO implement actual matching.
+        # how do they do it in torchmetrics mAP?
+        length = len(gt)  # for now just take the same amount of boxes and call it a day
+        return inferred[:length]
+
+    def boxes_to_masks(self, boxes, mask_shape):
+        masks = []
+        for box in boxes:
+            mask = torch.zeros(mask_shape, dtype=torch.uint8)
+            x1, y1, x2, y2 = box
+            mask[y1:y2, x1:x2] = 1
+            masks.append(mask)
+        return masks
+
+    def prepare_gt(self, metadata):
+        gt_boxes = [instance["boxes"] for instance in metadata]
+        gt_masks = [instance["masks"].type(torch.uint8) for instance in metadata]
+        gt_classes = [instance["categories"] for instance in metadata]
+        return gt_boxes, gt_masks, gt_classes
+
+    def calculate_metrics_detection(
+        self, detected_boxes, detected_classes, gt_boxes, gt_classes, images_shapes
+    ):
+        """
+        Calculates segmentation metrics for the given inferred and ground truth boxes.
+        Needs image shapes when converting the boxes to masks for jaccard index calculation.
+        Args:
+            detected_classes (list): List of inferred classes, as they come from boxes
+            gt_class (list): List of ground truth classes.
+            detected_boxes (list): List of lists of inferred boxes.
+            gt_boxes (list): List of lists of ground truth boxes.
+        Returns:
+            None
+        """
+        # M:N metrics
+        self.det_map_classless.update(
+            to_dict_map(detected_boxes),
+            to_dict_map(gt_boxes),
+        )
+
+        self.det_batch_classful.update(
+            to_dict_map_classful(detected_boxes, detected_classes),
+            to_dict_map_classful(gt_boxes, gt_classes),
+        )
+
+        # 1:1 metrics
+        selected_boxes = self.matching(gt=gt_boxes, inferred=detected_boxes)
+        for gt_box_list, box_list, shape in zip(
+            gt_boxes, selected_boxes, images_shapes
+        ):
+            # convert boxes to masks using original shape
+            box_list = self.boxes_to_masks(box_list, shape)
+            gt_box_list = self.boxes_to_masks(gt_box_list, shape)
+
+            # pair boxes together
+            for gt, inferred in zip(
+                gt_box_list,
+                box_list,
+            ):
+                IoU = self.det_IoU_metric.forward(
+                    inferred.to(self.device), gt.to(self.device)
+                )
+                self.IoU_boxes.append(IoU.cpu())
+
+    def calculate_metrics_segmentation(
+        self,
+        inferred_masks,
+        inferred_classes,
+        gt_masks,
+        gt_classes,
+    ):
+        """
+        Calculates segmentation metrics for the given inferred and ground truth masks.
+        Args:
+            inferred_class (list): List of inferred classes, as they come from boxes
+            gt_class (list): List of ground truth classes.
+            inferred_masks (list): List of lists of inferred masks.
+            gt_masks (list): List of lists of ground truth masks.
+        Returns:
+            None
+        """
+
+        # M:N metrics
+        self.seg_map_classless.update(
+            to_dict_map(inferred_masks),
+            to_dict_map(gt_masks),
+        )
+
+        self.seg_batch_classful.update(
+            to_dict_map_classful(inferred_masks, inferred_classes),
+            to_dict_map_classful(gt_masks, gt_classes),
+        )
+
+        # 1:1 metrics
+        selected_masks = self.matching(gt=gt_masks, inferred=inferred_masks)
+        for gt_masks_list, masks_list in zip(gt_masks, selected_masks):
+            # pair masks together
+            for gt, inferred in zip(
+                gt_masks_list.to(self.device),
+                masks_list.to(self.device),
+            ):
+                IoU = self.seg_IoU_metric.forward(inferred, gt)
+                self.IoU_masks.append(IoU.cpu())
+
+    def get_metrics(self):
+        assert self.evaluated
+
+        # TODO: return all in dicts, not just the IoUs
+        # compose dicts with metrics
+        # calculate mean IoUs
+        result_dict = {
+            # weighted avg IoUs and equal weight (mean) IoUs
+            "weighted det IoU": self.det_IoU_metric.compute(),
+            "weighted seg IoU": self.seg_IoU_metric.compute(),
+            "mean det IoU": np.mean(np.array(self.IoU_boxes)),
+            "mean seg IoU": np.mean(np.array(self.IoU_masks)),
+            # whole arrays
+            "IoU array boxes": self.IoU_boxes,
+            "IoU array masks": self.IoU_masks,
+            # mAPs , classless and per class for both seg,det
+            "classless mAP - detection": self.det_map_classless.compute(),
+            "classless mAP - segmentation": self.seg_map_classless.compute(),
+            "classful mAP - detection": self.det_batch_classful.compute(),
+            "classful mAP - segmentation": self.seg_batch_classful.compute(),
+        }
+        return result_dict
 
     def evaluate(self, data_loader, savepath=None, max_batch=None):
         """
@@ -134,8 +291,6 @@ class Evaluator:
         Raises:
             None
         """
-        box_IoUs = []
-        mask_IoUs = []
 
         # if classes are needed for detection (DINO etc.)
         classes = data_loader.dataset.get_classes()
@@ -147,60 +302,42 @@ class Evaluator:
             metadata = list(batch[1])
 
             # list of list of mask/boxes as GT
-            gt_boxes = [instance["boxes"] for instance in metadata]
-            gt_masks = [instance["masks"].type(torch.uint8) for instance in metadata]
+            gt_boxes, gt_masks, gt_classes = self.prepare_gt(metadata)
 
             # detection
-            detected_boxes, attention_points, point_labels = (
+            detected_boxes, attention_points, point_labels, detection_classes = (
                 self.model_det.detect_batch(images, metadata, classes)
             )
 
-            # select boxes for segmentation
-            if self.box_matching is not None:
-                selected_boxes = self.box_matching(
-                    gt_boxes_list=gt_boxes, detected_boxes_list=detected_boxes
-                )
-            else:  # default, take all boxes? breaks individual jaccard index
-                selected_boxes = gt_boxes
-
-            # batch detection metrics
-            if self.det_batch_metrics is not None:
-                self.det_batch_metrics.update(
-                    boxes_to_dict_map(selected_boxes),
-                    boxes_to_dict_map(gt_boxes),
-                )
+            # detection metrics
+            self.calculate_metrics_detection(
+                detected_boxes=detected_boxes,
+                detected_classes=detection_classes,
+                gt_classes=gt_classes,
+                gt_boxes=gt_boxes,
+                images_shapes=[gt_mask.shape for gt_mask in gt_masks],
+            )
 
             # can do box transforms here
             if self.boxes_transform is not None:
                 detected_boxes = boxes_transform(detected_boxes)
 
-            # segment, calculater batch and then pairwise metrics
+            # segment, calculate metrics
             if self.model_seg is not None:
                 inferred_masks = self.model_seg.infer_batch(
-                    images, selected_boxes, attention_points, point_labels
+                    images, detected_boxes, attention_points, point_labels
                 )
 
-                # batch metrics
-                if self.seg_batch_metrics is not None:
-                    self.seg_batch_metrics.update(
-                        masks_to_dict_map(inferred_masks),
-                        masks_to_dict_map(gt_masks),
-                    )
+                # if segmentation, then calculate metrics
+                self.calculate_metrics_segmentation(
+                    inferred_masks=inferred_masks,
+                    inferred_classes=detection_classes,
+                    gt_classes=gt_classes,
+                    gt_masks=gt_masks,
+                )
 
-                # pairwise  mask metrics
-                if self.seg_pairwise_metrics is not None:
-                    for j, (gt_masks_for_image, inferred_masks_for_image) in enumerate(
-                        zip(gt_masks, inferred_masks)
-                    ):
-                        for k, (gt, inferred) in enumerate(
-                            zip(
-                                gt_masks_for_image.to(self.device),
-                                inferred_masks_for_image.to(self.device),
-                            )
-                        ):
-                            self.seg_pairwise_metrics.update(inferred, gt)
-
-        return box_IoUs, mask_IoUs
+        # I can return the metrics after this
+        self.evaluated = True
 
 
 def test_evaluator():
@@ -208,85 +345,4 @@ def test_evaluator():
 
 
 if __name__ == "__main__":
-    #  from config here? loading from args?
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    batchsize = 6  # h4, b6 on RTX4000, b8,h6 on A100
-    sam_model = "b"  # b,h = base or huge
-    split = "val"  # train or val
-    max_batch = 10  # early cutoff for testing
-
-    detector = detection_models.GTboxDetector()
-    # or detector = detection_models.GTboxDetectorMiddle()
-
-    # load coco dataset
-    coco_val_dataset = CocoLoader(get_coco_split(split=split), transform=None)
-
-    # load sam
-    segmentation_model = segmentation_models.SamWrapper(device=device, model=sam_model)
-
-    # additional functions that in the pipeline
-    boxes_transform = None  # no transformation for now
-    box_matching = None  # selects boxes to use for seg.
-
-    # metrics for det, seg batch and seg pairwise
-    det_batch_metrics = MetricCollection(
-        [
-            # IntersectionOverUnion(),
-            MeanAveragePrecision(
-                iou_type="bbox",
-                average="macro",
-                class_metrics=False,
-            ),
-        ]
-    )
-    seg_pairwise_metrics = MetricCollection(JaccardIndex("binary").to(device))
-    seg_batch_metrics = MetricCollection(
-        [
-            # JaccardIndex("binary"),
-            MeanAveragePrecision(
-                iou_type="segm",
-                average="macro",
-                class_metrics=False,
-            ),
-        ]
-    )
-
-    # Instantiate the Evaluator with the requested parameters
-    evaluator = Evaluator(
-        device=device,
-        model_det=detector,
-        model_seg=segmentation_model,
-        det_batch_metrics=det_batch_metrics,
-        seg_batch_metrics=seg_batch_metrics,
-        seg_pairwise_metrics=seg_pairwise_metrics,
-        boxes_transform=boxes_transform,
-        box_matching=box_matching,
-    )
-
-    # loader from dataset
-    data_loader = coco_val_dataset.instantiate_loader(
-        batch_size=batchsize, num_workers=4
-    )
-
-    # run the evaluation
-    box_IoUs, mask_IoUs = evaluator.evaluate(data_loader, max_batch=max_batch)
-
-    # print results
-    print("\n\n")
-    print(det_batch_metrics.compute())
-    print("\n")
-    if segmentation_model is not None:
-        print(seg_batch_metrics.compute())
-        print("\n")
-        print(seg_pairwise_metrics.compute())
-
-    # process results further (mAP, Recall, IoU(s) etc.)
-    # save results to file?
-
-    """ 
-    print("Mean IoU: " + str(dataset_IoU.compute()))
-    filename = f"./out/coco_base_thresholds_{len(thresholds)}.npy"
-    # save to a file
-    with open(filename, "wb") as f:
-        np.save(f, np.array(thresholds))
-    """
+    test_evaluator()

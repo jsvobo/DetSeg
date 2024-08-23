@@ -22,19 +22,6 @@ def get_IoU_multiple(masks, gt_masks):
     return [get_IoU_masks(gt_masks[i], masks[i]) for i in range(len(masks))]
 
 
-def box_coco_to_sam(coco_box):
-    """
-    Convert coco box to sam box
-    from x0,y0,w,h to x0,y0,x1,y1
-    """
-    return (
-        coco_box[0],
-        coco_box[1],
-        coco_box[0] + coco_box[2],
-        coco_box[1] + coco_box[3],
-    )
-
-
 def get_middle_point(box):
     """
     Get the middle point of a bounding box in format x0,y0,x1,y1
@@ -58,7 +45,7 @@ def crop_xyxy(img, mask, box, crop_box):
     Crop the image and mask, starting at coordinates x0,y0 at the left upper corner.
     The resulting window has a size defined by the width and height of crop_box.
     """
-    x0, y0, x1, y1 = cl(crop_box[0]), cl(crop_box[1]), cl(crop_box[2]), cl(crop_box[3])
+    x0, y0, x1, y1 = crop_box
 
     if img.__class__.__name__ == "Image":  # PIL image
         cropped_img = img.crop((x0, y0, x1, y1))

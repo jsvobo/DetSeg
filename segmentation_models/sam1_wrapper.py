@@ -8,6 +8,7 @@ from segmentation_models.base_seg_wrapper import BaseSegmentWrapper
 
 from segment_anything.utils.transforms import ResizeLongestSide
 from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
+import yaml
 
 
 class SamWrapper(BaseSegmentWrapper):
@@ -106,7 +107,6 @@ class SamWrapper(BaseSegmentWrapper):
 
 
 class AutomaticSam(SamAutomaticMaskGenerator):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -138,23 +138,21 @@ class AutomaticSam(SamAutomaticMaskGenerator):
         return generated_masks_dicts
 
 
-def prepare_sam(model, device):
+def prepare_sam(
+    model,
+    device,
+):
     """
     Load SAM-1 predictor and model itself
     """
-    # TODO: config file
-    # sam_vit_b_01ec64.pth
-    # vit_b
-    # sam_vit_h_4b8939.pth
-    # vit_h
+    assert model in ["b", "h"]
 
-    if model == "b":
-        sam_checkpoint = "/mnt/vrg2/imdec/models/sam1/sam_vit_b_01ec64.pth"
-        model_type = "vit_b"
+    with open("segmentation_models/config/sam1_conf.yaml", "r") as f:
+        config = yaml.safe_load(f)
+    model_dict = config[model]
 
-    elif model == "h":
-        sam_checkpoint = "/mnt/vrg2/imdec/models/sam1/sam_vit_h_4b8939.pth"
-        model_type = "vit_h"
+    sam_checkpoint = model_dict["path"]
+    model_type = model_dict["model_type"]
 
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     sam.to(device=device)

@@ -1,17 +1,17 @@
 segmentation: 
-  name: sam1 #sam1, sam2
+  name: sam1 #sam1, sam2, None
   model: b  # b,h = base or huge
   batchsize: 6  # h4, b6 on RTX4000, b8,h6 on A100
 
-detector: gt boxes middle 
-# gt boxes , gt boxes middle  More will be added soon
+detector: gt boxes middle
+# gt boxes , gt boxes middle, None
  
 dataset: 
   name: coco 
   split: val  # train or val
   year: 2017
 
-max_batch: 10 #None or integer
+max_batch: 10 # None or integer
 save_results: False,
-print_results: True,
-save_path: ./out/
+print_results: False,
+save_path: ./out/pipeline_results/
