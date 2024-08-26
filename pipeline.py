@@ -4,6 +4,7 @@ import numpy as np
 import yaml
 import hydra
 from omegaconf import DictConfig, OmegaConf
+import pprint
 
 import utils
 from datasets.dataset_loading import CocoLoader, get_coco_split
@@ -18,10 +19,10 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 
 # dicts with implemented models, to specify class from reading confif as string
-segmentation_dict = {"sam1": segmentation_models.SamWrapper, "sam2": None, "None": None}
+segmentation_dict = {"sam1": segmentation_models.SamWrapper, "sam2": None}
 detection_dict = {
-    "gt boxes": detection_models.GTboxDetector,
-    "gt boxes middle": detection_models.GTboxDetectorMiddle,
+    "gt_boxes": detection_models.GTboxDetector,
+    "gt_boxes_middle": detection_models.GTboxDetectorMiddle,
 }
 dataset_dict = {
     "coco": {"loader": CocoLoader, "split_fn": get_coco_split},
@@ -43,7 +44,6 @@ def hardcoded_config():
 
 
 class Pipeline:
-
     def __init__(self, cfg: DictConfig):
         cfg_parsed = self.prepar_cfg(cfg)
         self.run(cfg_parsed)
@@ -71,11 +71,11 @@ class Pipeline:
 
     def prepare_seg(self, cfg: DictConfig, device: str):
         # which class is for this model?
-        seg_class = segmentation_dict[cfg.name]
-
-        if seg_class is None:
+        model_name = cfg.name
+        if model_name == "None":
             segmentation_model = None
         else:
+            seg_class = segmentation_dict[model_name]
             sam_size = cfg.model
             segmentation_model = seg_class(device=device, model=sam_size)
         return segmentation_model
@@ -91,11 +91,11 @@ class Pipeline:
         mean_seg_IoU = result_dict["mean seg IoU"]
         weighed_seg_IoU = result_dict["weighted seg IoU"]
 
+        print("\nResults:")
         print(f"Mean segmentation IoU: {round(float(mean_seg_IoU),3)}")
         print(f"Weighted segmentation IoU: {round(float(weighed_seg_IoU),3)}")
 
-        # TODO: restructure this to print results from the output dict, just some? prune results in evaluator?
-        # print in a structured way? a table? save a table for tex?
+        pprint.pprint(result_dict["classless mAP - segmentation"])
 
     def run(self, cfg: dict):
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -112,7 +112,7 @@ class Pipeline:
         segmentation_model = self.prepare_seg(cfg.segmentation, device)
 
         # additional functions in the pipeline. None for now
-        boxes_transform = None  # no transformation for now. will load through dict
+        boxes_transform = None  # no transformation for now.
 
         # Instantiate the Evaluator with the requested parameters
         evaluator = Evaluator(
@@ -129,25 +129,22 @@ class Pipeline:
 
         # run the evaluation
         evaluator.evaluate(data_loader, max_batch=cfg.max_batch)
-        result_dict = evaluator.get_metrics()  # collect results
+        result_dict, array_masks, array_boxes = (
+            evaluator.get_metrics()
+        )  # collect results
 
         # print results
         if print_results:
             self.print_results(result_dict)
 
-        # save result dictionary and metadata
+        # save result dictionary and metadata to a file.
         if save_results:
-            # load output dir from config
-            # TODO: save to a file with everything, then parse it? class/helper functions?
-            pass
-            # utils.save_results(result_dict, metadata_dict, cfg:DictConfig)
-            """ 
-            print("Mean IoU: " + str(dataset_IoU.compute()))
-            filename = f"./out/coco_base_thresholds_{len(thresholds)}.npy"
-            # save to a file
-            with open(filename, "wb") as f:
-                np.save(f, np.array(thresholds))
-            """
+            utils.save_results(
+                result_dict=result_dict,
+                array_masks=array_masks,
+                array_boxes=array_boxes,
+                cfg=cfg,
+            )
 
 
 @hydra.main(config_path="config", config_name="pipeline_config.yaml", version_base=None)

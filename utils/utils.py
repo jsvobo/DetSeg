@@ -67,14 +67,13 @@ def crop_xyxy(img, mask, box, crop_box):
     return cropped_img, cropped_mask, box_coords
 
 
-def save_results(result_dict, metadata_dict, path):
-    pass
-    # TODO: helper save/ load functions to use in evaluator, pipeline or notebooks
-
-    """ 
-    print("Mean IoU: " + str(dataset_IoU.compute()))
-    filename = f"./out/coco_base_thresholds_{len(thresholds)}.npy"
-    # save to a file
-    with open(filename, "wb") as f:
-        np.save(f, np.array(thresholds))
-    """
+def convert_tensors_to_save(d):
+    if isinstance(d, dict):
+        # Recursively apply the function for nested dictionaries
+        return {k: convert_tensors_to_save(v) for k, v in d.items()}
+    elif isinstance(d, torch.Tensor):
+        # Convert the torch.Tensor to a numpy array
+        return d.cpu().tolist()
+    else:
+        # Return the value as is if it's neither a dict nor a torch.Tensor
+        return d

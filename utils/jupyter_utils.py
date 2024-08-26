@@ -69,13 +69,15 @@ def grid_masks_boxes(
         if i == 0:  # straight up image
             ax.imshow(image)
             ax.axis("off")
-            ax.set_title("Base image", fontsize=global_titlesize)
+            if titles is not None:
+                ax.set_title("Base image", fontsize=global_titlesize)
             continue
 
         index = i - 1
         ax.axis("off")
         ax.imshow(image)
-        ax.set_title(titles[index], fontsize=global_titlesize)
+        if titles is not None:
+            ax.set_title(titles[index], fontsize=global_titlesize)
 
         if points is not None:
             assert len(points) == len(point_labels)

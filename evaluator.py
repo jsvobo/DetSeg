@@ -14,33 +14,19 @@ import segmentation_models
 import detection_models
 
 
-# helper functions for evaluator list of lists of boxs/masks -> list of dicts with boxes/masks
-def to_dict_map(list_of_list_of_boxes):
-    """
-    Convert a list of lists of boxes for one image into a list of dictionaries.
-    Args:
-        list_of_list_of_boxes (list): A list of lists containing boxes for one image.
-    Returns:
-        list: A list of dictionaries, where each dictionary represents a box with the following keys:
-            - "boxes": The list of boxes.
-            - "labels": A tensor of zeros with the same length as the list of boxes.
-            - "scores": A tensor of ones with the same length as the list of boxes.
-    """
-    key_type = (
-        "boxes" if len(list_of_list_of_boxes[0][0]) == 4 else "masks"
-    )  # last dim is 4 -> boxes, else masks
-
-    return [
-        {
-            key_type: list_of_boxes,
-            "labels": torch.zeros(len(list_of_boxes), dtype=torch.int32),
-            "scores": torch.ones(len(list_of_boxes), dtype=torch.float32),
-        }
-        for list_of_boxes in list_of_list_of_boxes
-    ]
+def convert_tensors_to_save(d):
+    if isinstance(d, dict):
+        # Recursively apply the function for nested dictionaries
+        return {k: convert_tensors_to_save(v) for k, v in d.items()}
+    elif isinstance(d, torch.Tensor):
+        # Convert the torch.Tensor to a numpy array
+        return d.cpu().tolist()
+    else:
+        # Return the value as is if it's neither a dict nor a torch.Tensor
+        return d
 
 
-def to_dict_map_classful(list_of_list_of_boxes, list_of_list_of_classes):
+def to_dict_for_map(list_of_list_of_boxes, list_of_list_of_classes):
     """
     Convert a list of lists of boxes for one image into a list of dictionaries.
     Args:
@@ -135,10 +121,10 @@ class Evaluator:
 
         # batch metrics, mAP, classful, per class, extended output
         self.seg_batch_classful = MeanAveragePrecision(
-            iou_type="segm", average="micro", class_metrics=True, extended_summary=True
+            iou_type="segm", average="micro", class_metrics=True, extended_summary=False
         )
         self.det_batch_classful = MeanAveragePrecision(
-            iou_type="bbox", average="macro", class_metrics=True, extended_summary=True
+            iou_type="bbox", average="macro", class_metrics=True, extended_summary=False
         )
 
         # calculating something at all
@@ -179,30 +165,30 @@ class Evaluator:
         Returns:
             None
         """
-        # M:N metrics
-        self.det_map_classless.update(
-            to_dict_map(detected_boxes),
-            to_dict_map(gt_boxes),
-        )
 
-        self.det_batch_classful.update(
-            to_dict_map_classful(detected_boxes, detected_classes),
-            to_dict_map_classful(gt_boxes, gt_classes),
-        )
+        dict_detected = to_dict_for_map(detected_boxes, detected_classes)
+        dict_gt = to_dict_for_map(gt_boxes, gt_classes)
+
+        # M:N metrics
+        self.det_map_classless.update(dict_detected, dict_gt)
+        self.det_batch_classful.update(dict_detected, dict_gt)
 
         # 1:1 metrics
         selected_boxes = self.matching(gt=gt_boxes, inferred=detected_boxes)
         for gt_box_list, box_list, shape in zip(
             gt_boxes, selected_boxes, images_shapes
         ):
+            if len(gt_box_list) == 0:
+                continue
+
             # convert boxes to masks using original shape
-            box_list = self.boxes_to_masks(box_list, shape)
-            gt_box_list = self.boxes_to_masks(gt_box_list, shape)
+            box_list_as_mask = self.boxes_to_masks(box_list, shape)
+            gt_box_list_as_mask = self.boxes_to_masks(gt_box_list, shape)
 
             # pair boxes together
             for gt, inferred in zip(
-                gt_box_list,
-                box_list,
+                gt_box_list_as_mask,
+                box_list_as_mask,
             ):
                 IoU = self.det_IoU_metric.forward(
                     inferred.to(self.device), gt.to(self.device)
@@ -226,17 +212,12 @@ class Evaluator:
         Returns:
             None
         """
+        dict_detected = to_dict_for_map(inferred_masks, inferred_classes)
+        dict_gt = to_dict_for_map(gt_masks, gt_classes)
 
         # M:N metrics
-        self.seg_map_classless.update(
-            to_dict_map(inferred_masks),
-            to_dict_map(gt_masks),
-        )
-
-        self.seg_batch_classful.update(
-            to_dict_map_classful(inferred_masks, inferred_classes),
-            to_dict_map_classful(gt_masks, gt_classes),
-        )
+        self.seg_map_classless.update(dict_detected, dict_gt)
+        self.seg_batch_classful.update(dict_detected, dict_gt)
 
         # 1:1 metrics
         selected_masks = self.matching(gt=gt_masks, inferred=inferred_masks)
@@ -251,26 +232,43 @@ class Evaluator:
 
     def get_metrics(self):
         assert self.evaluated
-
-        # TODO: return all in dicts, not just the IoUs
-        # compose dicts with metrics
-        # calculate mean IoUs
         result_dict = {
             # weighted avg IoUs and equal weight (mean) IoUs
-            "weighted det IoU": self.det_IoU_metric.compute(),
-            "weighted seg IoU": self.seg_IoU_metric.compute(),
-            "mean det IoU": np.mean(np.array(self.IoU_boxes)),
-            "mean seg IoU": np.mean(np.array(self.IoU_masks)),
-            # whole arrays
-            "IoU array boxes": self.IoU_boxes,
-            "IoU array masks": self.IoU_masks,
+            "weighted det IoU": float(self.det_IoU_metric.compute().cpu()),
+            "weighted seg IoU": float(self.seg_IoU_metric.compute().cpu()),
+            "mean det IoU": float(np.mean(np.array(self.IoU_boxes))),
+            "mean seg IoU": float(np.mean(np.array(self.IoU_masks))),
             # mAPs , classless and per class for both seg,det
-            "classless mAP - detection": self.det_map_classless.compute(),
-            "classless mAP - segmentation": self.seg_map_classless.compute(),
-            "classful mAP - detection": self.det_batch_classful.compute(),
-            "classful mAP - segmentation": self.seg_batch_classful.compute(),
+            "classless mAP - detection": utils.convert_tensors_to_save(
+                self.det_map_classless.compute()
+            ),
+            "classless mAP - segmentation": utils.convert_tensors_to_save(
+                self.seg_map_classless.compute()
+            ),
+            "classful mAP - detection": utils.convert_tensors_to_save(
+                self.det_batch_classful.compute()
+            ),
+            "classful mAP - segmentation": utils.convert_tensors_to_save(
+                self.seg_batch_classful.compute()
+            ),
         }
-        return result_dict
+        return (
+            result_dict,
+            np.array(self.IoU_masks),
+            np.array(self.IoU_boxes),
+        )
+
+    def filter_images(self, images, metadata):
+        # Calculate where_zero array, 1 if no boxes, 0 if boxes
+        filtered_images = []
+        filtered_metadata = []
+
+        for j in range(len(images)):
+            if len(metadata[j]["boxes"]) == 0:  # no boxes?
+                continue
+            filtered_images.append(images[j])
+            filtered_metadata.append(metadata[j])
+        return filtered_images, filtered_metadata
 
     def evaluate(self, data_loader, savepath=None, max_batch=None):
         """
@@ -296,6 +294,9 @@ class Evaluator:
             images = list(batch[0])
             metadata = list(batch[1])
 
+            # Calculate where_zero array, 1 if no boxes, 0 if boxes
+            images, metadata = self.filter_images(images, metadata)
+
             # list of list of mask/boxes as GT
             gt_boxes, gt_masks, gt_classes = self.prepare_gt(metadata)
 
@@ -310,7 +311,7 @@ class Evaluator:
                 detected_classes=detection_classes,
                 gt_classes=gt_classes,
                 gt_boxes=gt_boxes,
-                images_shapes=[gt_mask.shape for gt_mask in gt_masks],
+                images_shapes=[gt_mask.shape[1:] for gt_mask in gt_masks],
             )
 
             # can do box transforms here

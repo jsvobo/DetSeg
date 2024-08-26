@@ -3,8 +3,8 @@ segmentation:
   model: b  # b,h = base or huge
 
 detector:
-  name:  gt boxes middle
-# gt boxes , gt boxes middle, None
+  name:  gt_boxes
+# gt_boxes , gt_boxes_middle, None
  
 dataset: 
   name: coco 
@@ -13,13 +13,13 @@ dataset:
 
 
 batchsize: 6  # h4, b6 on RTX4000, b8,h6 on A100
-max_batch: 2 # None or integer
-save_results: False
+max_batch: 100 # None or integer
+save_results: True
 print_results: True
 save_path: ./out/pipeline_results/
 
 
-hydra:  #disable output, saving our way
+hydra:  #disable output
   output_subdir: null  
   run:  
     dir: .
