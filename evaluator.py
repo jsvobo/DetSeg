@@ -144,11 +144,6 @@ class Evaluator:
         # calculating something at all
         assert (model_seg is not None) or (model_det is not None)
 
-        # takes GT bboxes, need something for segmentation still
-        if model_det is None:
-            self.model_det = detection_models.GTboxDetector()
-            # default, just take GT boxes, all classes 0, no points
-
     def matching(self, gt, inferred):
         # TODO implement actual matching.
         # how do they do it in torchmetrics mAP?

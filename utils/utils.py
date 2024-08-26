@@ -66,6 +66,9 @@ def crop_xyxy(img, mask, box, crop_box):
 
     return cropped_img, cropped_mask, box_coords
 
+
+def save_results(result_dict, metadata_dict, path):
+    pass
     # TODO: helper save/ load functions to use in evaluator, pipeline or notebooks
 
     """ 
