@@ -14,18 +14,6 @@ import segmentation_models
 import detection_models
 
 
-def convert_tensors_to_save(d):
-    if isinstance(d, dict):
-        # Recursively apply the function for nested dictionaries
-        return {k: convert_tensors_to_save(v) for k, v in d.items()}
-    elif isinstance(d, torch.Tensor):
-        # Convert the torch.Tensor to a numpy array
-        return d.cpu().tolist()
-    else:
-        # Return the value as is if it's neither a dict nor a torch.Tensor
-        return d
-
-
 def to_dict_for_map(list_of_list_of_boxes, list_of_list_of_classes):
     """
     Convert a list of lists of boxes for one image into a list of dictionaries.
@@ -296,6 +284,8 @@ class Evaluator:
 
             # Calculate where_zero array, 1 if no boxes, 0 if boxes
             images, metadata = self.filter_images(images, metadata)
+            if len(images) == 0:
+                continue  # no boxes in this batch at all
 
             # list of list of mask/boxes as GT
             gt_boxes, gt_masks, gt_classes = self.prepare_gt(metadata)
