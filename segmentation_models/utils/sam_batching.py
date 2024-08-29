@@ -15,11 +15,11 @@ def _select_best_masks(batched_output, resulting_masks, index_list):
     # resulting masks contain [] in places where no boxes were detected
     # then return this array with new masks in the rest
     resulting_masks = resulting_masks.copy()
-    for j, dict_output in enumerate(batched_output):
-        pred_quality = dict_output["iou_predictions"]
-        best = np.argmax(pred_quality.cpu(), axis=1)
+    for idx_in_batch, dict_output in enumerate(batched_output):
+        pred_qualities = dict_output["iou_predictions"]
+        best = np.argmax(pred_qualities.cpu(), axis=1)
 
         arange = torch.arange(best.shape[0])
         best_masks = dict_output["masks"][arange, best]
-        resulting_masks[index_list[j]] = best_masks
+        resulting_masks[index_list[idx_in_batch]] = best_masks
     return resulting_masks

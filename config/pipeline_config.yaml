@@ -19,7 +19,8 @@ print_results: True
 save_path: ./out/pipeline_results/
 
 
-hydra:  #disable output
+#disable saving results and logging, dont touch
+hydra:  
   output_subdir: null  
   run:  
     dir: .

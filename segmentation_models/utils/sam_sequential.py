@@ -53,10 +53,10 @@ def _infer_masks_single_image(
     mask_scores = []
     sam_predictor.set_image(np.array(image))
 
-    for i in range(len_prompts):
-        points = point_coords[i] if has_points else None
-        labels = point_labels[i] if has_labels else None
-        box = boxes[i] if has_boxes else None
+    for prompt_idx in range(len_prompts):
+        points = point_coords[prompt_idx] if has_points else None
+        labels = point_labels[prompt_idx] if has_labels else None
+        box = boxes[prompt_idx] if has_boxes else None
 
         # run inferrence on one prompt and return the best mask
         masks, scores, logits = sam_predictor.predict(

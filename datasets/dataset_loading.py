@@ -130,9 +130,9 @@ def test_coco_loading():
     assert item["image"].shape[2] == 3
     assert len(coco.get_amount(10)) == 10
 
-    print("\n")
     print(coco.translate_catIDs([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
     print(coco.get_classes())
+    print("Coco loading test passed!")
 
 
 if __name__ == "__main__":

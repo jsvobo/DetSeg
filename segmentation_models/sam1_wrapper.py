@@ -110,8 +110,8 @@ class AutomaticSam(SamAutomaticMaskGenerator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def automatic_one_image(self, image, mask_generator):
-        masks_dicts = self.mask_generator.generate(image)
+    def automatic_one_image(self, image):
+        masks_dicts = self.generate(image)
 
         detected_boxes = []
         detected_masks = []
@@ -128,6 +128,14 @@ class AutomaticSam(SamAutomaticMaskGenerator):
         return detected_boxes, detected_masks, points  # for each image
 
     def automatic_multiple_images(self, items):
+        """
+        inputs:
+            list of items, each item is a dict with key "image" containing the image
+        outputs:
+            list of dicts, each dict contains the keys "boxes", "masks", "points"
+
+        example in sam.ipynb
+        """
         generated_masks_dicts = []
         for item in items:
             image = item["image"]
@@ -160,11 +168,42 @@ def prepare_sam(
     return SamPredictor(sam), sam
 
 
-def test_sam_wrappers():
-    print("Not implemented yet")
-    # load wrapper and the automatic generator wrapper
-    # do some very basic testing
+def test_sam1_wrappers():
+    print("\nTesting sam1 wrapper:")
+
+    sam_wrapper = SamWrapper(device="cuda", model="b")
+    image = np.array(torch.randn(480, 640, 3))
+    box = torch.tensor([[0, 0, 100, 100]])
+
+    # infer masks, same box and random image, but once adding box directly and once as a gt
+    masks1 = sam_wrapper.infer_masks(items=[{"image": image}], boxes=[[box]])
+    masks2 = sam_wrapper.infer_masks(
+        items=[
+            {"image": image, "annotations": {"boxes": [box]}}
+        ]  # simulate our data structure
+    )
+    assert torch.eq(
+        masks1[0]["masks"][0], masks2[0]["masks"][0]
+    ).all()  # the output is the same
+
+    print("Sam1 wrapper test passed! Commencing with automatic mask generator testing")
+
+    sam_auto = AutomaticSam(
+        model=sam_wrapper.get_sam(),  # take sam loaded from wrapper
+        points_per_side=32,
+        pred_iou_thresh=0.9,  # rejects "bad" masks
+        stability_score_thresh=0.95,  # rejects "bad" masks
+        crop_n_layers=1,
+        crop_n_points_downscale_factor=2,
+        min_mask_region_area=200,
+    )
+
+    automatic_segmentations = sam_auto.automatic_multiple_images(
+        items=[{"image": image}]
+    )  # segment automatically using the generator above
+
+    print("Automatic segmentation test passed!")
 
 
 if __name__ == "__main__":
-    test_sam_wrappers()
+    test_sam1_wrappers()

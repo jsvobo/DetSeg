@@ -10,15 +10,17 @@ This repository is for exploration of different object detection and segmentatio
         MViT https://github.com/mmaaz60/mvits_for_class_agnostic_od.git 
         PROB https://github.com/orrzohar/PROB.git
         Uni-Detector (?)
+        Grounding DINO
     Segmentation
-        SAM-1 (downloaded by pip)
+        SAM-1 
+        SAM-2
 
 ### Code structure, main modules:
     pipeline.py - main pipeline class. when run directly, evaluates the pipeline loaded from config
     evaluator.py - contains evaluator class used in the pipeline. can be also run directly
     sam.ipynb - sam sequential inference on images, visuals of masks etc.
     coco_visuals.ipynb - notebook working with coco dataset
-    IoU_recall_visuals - loads saved IoU values and produces histograms etc.
+    IoU_recall_visuals - loads saved IoU values and other results and produces histograms etc.
     test_all.py - runs all available tests for the code
     
     /detection_models - detection model wrappers, dummy classes
@@ -35,6 +37,7 @@ This repository is for exploration of different object detection and segmentatio
     /utils
         utils.py - general utility functions. work with bboxes and masks
         jupyter_utils.py - code snippets used for data visualisation in plt. 
+        saving_utils.py - code for saving the results of pipeline into a specififed location
 
     /testing
         cuda_test.py - testing cuda availability and where CUDA_HOME is set to
@@ -42,7 +45,8 @@ This repository is for exploration of different object detection and segmentatio
     /datasets - where to put datasets files and files working with the datasets
         dataset_loading.py - coco wrapper, filepath parsing, test for coco_loading
 
-    /config - (not used right now, will use config files in the future)
+    /config 
+        pipeline_config.yaml - main config for the pipeline. (the project uses hydra to manage configurations)
 
 
 ### Needed coco structure (for year=2017, analogous for 2014 in the same place)
@@ -62,8 +66,9 @@ This repository is for exploration of different object detection and segmentatio
         Test everything loading by running:
             python test_all.py
         
-        run python evaluator.py, change pipeline parameters in main
+        run python pipeline.py, change parameters in the config/pipeline_config.yaml
         coco_visuals.ipynb, sam.ipynb contain visualisation of respective functionality
+        results of the pipeline are saved locally, can be loaed in IoU_recall_visuals.ipynb notebook
     
 
 ### Important links:

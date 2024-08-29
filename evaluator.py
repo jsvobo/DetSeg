@@ -327,7 +327,22 @@ class Evaluator:
 
 
 def test_evaluator():
-    print("Not implemented yet")
+    print("\nTesting Evaluator")
+    device = "cpu"
+
+    detector = detection_models.GTboxDetector()
+    segmentation_model = segmentation_models.BaseSegmentWrapper(
+        device=device, model="whatever, dummy class here"
+    )
+    boxes_transform = None
+
+    evaluator = Evaluator(
+        device=device,
+        model_det=detector,
+        model_seg=segmentation_model,
+        boxes_transform=boxes_transform,
+    )
+    print("Evaluator test passed!")
 
 
 if __name__ == "__main__":

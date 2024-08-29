@@ -19,28 +19,37 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 
 # dicts with implemented models, to specify class from reading confif as string
-segmentation_dict = {"sam1": segmentation_models.SamWrapper, "sam2": None}
+segmentation_dict = {
+    "sam1": segmentation_models.SamWrapper,
+    "sam2": None,
+}  # TODO: SAM-2, HQ or FAST sam?
 detection_dict = {
     "gt_boxes": detection_models.GTboxDetector,
-    "gt_boxes_middle": detection_models.GTboxDetectorMiddle,
+    "gt_boxes_middle": detection_models.GTboxDetectorMiddle,  # Add other versions. CA, with points from attention etc.
 }
 dataset_dict = {
-    "coco": {"loader": CocoLoader, "split_fn": get_coco_split},
+    "coco": {
+        "loader": CocoLoader,
+        "split_fn": get_coco_split,
+    },  # Loader class and function to get split paths
 }
 
 
 def hardcoded_config():
-    # for testing purposes, dummy config
-    return {
-        "dataset": {"name": "coco", "split": "val", "year": 2017},
-        "detector": {"name": "gt boxes middle"},
-        "segmentation": {"name": "sam1", "model": "b"},
-        "save_results": False,
-        "print_results": True,
-        "batchsize": 6,
-        "max_batch": 10,  # early cutoff for testing
-        "save_path": "./out/pipeline_results/",
-    }
+    # for testing purposes, dummy config.
+    # change if the config structure changes, otherwise tests wont work
+    return DictConfig(
+        {
+            "dataset": {"name": "coco", "split": "val", "year": 2017},
+            "detector": {"name": "gt_boxes_middle"},
+            "segmentation": {"name": "sam1", "model": "b"},
+            "save_results": False,
+            "print_results": True,
+            "batchsize": 6,
+            "max_batch": 2,  # early cutoff for testing
+            "save_path": "./out/pipeline_results/",
+        }
+    )
 
 
 class Pipeline:
@@ -49,6 +58,7 @@ class Pipeline:
         self.run(cfg_parsed)
 
     def prepare_dataset(self, cfg: DictConfig):
+        # prepare dataset from config
         dataset_name = cfg.name
         split = cfg.split
         year = cfg.year
@@ -62,6 +72,7 @@ class Pipeline:
         return dataset
 
     def prepare_det(self, cfg: DictConfig):
+        # prepare detection model based on config
         model_name = cfg.name
         if model_name == "None":
             model_det = None
@@ -70,7 +81,7 @@ class Pipeline:
         return model_det
 
     def prepare_seg(self, cfg: DictConfig, device: str):
-        # which class is for this model?
+        # prepare segmentation model based on config
         model_name = cfg.name
         if model_name == "None":
             segmentation_model = None
@@ -95,7 +106,9 @@ class Pipeline:
         print(f"Mean segmentation IoU: {round(float(mean_seg_IoU),3)}")
         print(f"Weighted segmentation IoU: {round(float(weighed_seg_IoU),3)}")
 
-        pprint.pprint(result_dict["classless mAP - segmentation"])
+        pprint.pprint(
+            result_dict["classless mAP - segmentation"]
+        )  # add more dicts here?
 
     def run(self, cfg: dict):
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -154,8 +167,10 @@ def main(cfg):
 
 
 def test_pipeline():
+    print("\nTesting pipeline")
     cfg = hardcoded_config()
-    pipeline = Pipeline(cfg)
+    pipeline = Pipeline(cfg)  # run on coco
+    print("Pipeline test passed!")
 
 
 if __name__ == "__main__":

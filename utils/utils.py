@@ -68,6 +68,10 @@ def crop_xyxy(img, mask, box, crop_box):
 
 
 def convert_tensors_to_save(d):
+    """
+    Recursively convert dictionary with tensors to dictionary with lists at the leaves.
+    This is done for saving purposes, as torch.Tensor cannot be saved to disk
+    """
     if isinstance(d, dict):
         # Recursively apply the function for nested dictionaries
         return {k: convert_tensors_to_save(v) for k, v in d.items()}
