@@ -1,12 +1,7 @@
-defaults:
-  - sam_model: b #b or h
 
+sam_model: b # b or h for sam1
+
+# dont change. 
+# this path leads to specification of chekpoints for different sizes
+sam_path_config: ./config/segmentation/other/sam1_paths.yaml 
 class_name: SamWrapper #for loading appropriate class in pipeline
-
-
-# b: 
-#   path: /mnt/vrg2/imdec/models/sam1/sam_vit_b_01ec64.pth
-#   model_type: vit_b
-# h: 
-#   path: /mnt/vrg2/imdec/models/sam1/sam_vit_h_4b8939.pth
-#   model_type: vit_h

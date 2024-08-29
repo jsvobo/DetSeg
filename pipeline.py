@@ -18,26 +18,6 @@ from torchmetrics.detection.iou import IntersectionOverUnion
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 
-# dicts with implemented models, to specify class from reading confif as string
-
-
-def hardcoded_config():
-    # for testing purposes, dummy config.
-    # change if the config structure changes, otherwise tests wont work
-    return DictConfig(  # rewrite to load one special config for testing
-        {
-            "dataset": {"name": "coco", "split": "val", "year": 2017},
-            "detector": {"name": "gt_boxes_middle"},
-            "segmentation": {"name": "sam1", "model": "b"},
-            "save_results": False,
-            "print_results": True,
-            "batchsize": 6,
-            "max_batch": 2,  # early cutoff for testing
-            "save_path": "./out/pipeline_results/",
-        }
-    )
-
-
 class Pipeline:
     def __init__(self, cfg: DictConfig):
         cfg_parsed = self.prepar_cfg(cfg)
@@ -67,13 +47,12 @@ class Pipeline:
 
     def prepare_seg(self, cfg: DictConfig, device: str):
         # prepare segmentation model based on config
-        print(cfg)
         model_name = cfg.class_name
         if model_name == "None":
             segmentation_model = None
         else:
             segmentation_model = getattr(segmentation_models, model_name)(
-                device=device, cfg=cfg.sam_model
+                device=device, model=cfg.sam_model, cfg=cfg
             )
         return segmentation_model
 
@@ -150,13 +129,6 @@ class Pipeline:
 def main(cfg):
     OmegaConf.set_struct(cfg, False)
     pipeline = Pipeline(cfg)
-
-
-def test_pipeline():
-    print("\nTesting pipeline")
-    cfg = hardcoded_config()
-    pipeline = Pipeline(cfg)  # run on coco
-    print("Pipeline test passed!")
 
 
 if __name__ == "__main__":

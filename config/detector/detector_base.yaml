@@ -1,3 +1,4 @@
 class_name: GTboxDetector 
 # GTboxDetector, GTboxDetectorMiddle or None
-# name of the detection model to use. No additional arguments are required.
+# name of the detection class to use. 
+# No additional arguments are required. (so far)

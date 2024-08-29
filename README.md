@@ -66,10 +66,12 @@ This repository is for exploration of different object detection and segmentatio
         Test everything loading by running:
             python test_all.py
         
-        run python pipeline.py, change parameters in the config/pipeline_config.yaml
+        run python pipeline.py, change parameters in the config/pipeline_config.yaml and other configs
         coco_visuals.ipynb, sam.ipynb contain visualisation of respective functionality
-        results of the pipeline are saved locally, can be loaed in IoU_recall_visuals.ipynb notebook
+        results of the pipeline are saved locally, can be loaded in IoU_recall_visuals.ipynb notebook
     
+    To run from cmd: 
+        python pipeline.py detector.class_name=None max_batch=10 batch_size=1 segmentation.class_name=None detector.class_name=None 
 
 ### Important links:
 DETR - how to get the attention points?

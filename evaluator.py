@@ -274,7 +274,7 @@ class Evaluator:
         """
 
         # if classes are needed for detection (DINO etc.)
-        classes = data_loader.dataset.get_classes()
+        all_classes = data_loader.dataset.get_classes()
 
         for i, batch in tqdm(enumerate(data_loader)):
             if (max_batch is not None) and (i > max_batch):
@@ -292,7 +292,7 @@ class Evaluator:
 
             # detection
             detected_boxes, attention_points, point_labels, detection_classes = (
-                self.model_det.detect_batch(images, metadata, classes)
+                self.model_det.detect_batch(images, metadata, all_classes)
             )
 
             # detection metrics

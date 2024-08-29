@@ -23,7 +23,7 @@ def box_coco_to_sam(coco_box):
     )
 
 
-def get_coco_split(split: str = "train", year: str = "2017", root=""):
+def get_coco_split(split: str = "train", year: str = "2017", root=None):
     """
     Returns the paths of the COCO dataset split for a given year.
     Args:
@@ -36,6 +36,8 @@ def get_coco_split(split: str = "train", year: str = "2017", root=""):
 
     assert split in ["train", "val"]
     assert year in ["2014", "2017"]
+    if root is None:
+        root = "/mnt/vrg2/imdec/datasets/COCO"  # default root
 
     annotation_path = os.path.join(root, "annotations")
     type_ann = "instances"  # instances, captions, person_keypoints
@@ -122,7 +124,7 @@ class CocoLoader(CocoDetection):
 def test_coco_loading():
     print("\nTesting coco loading")
 
-    paths = get_coco_split("val", "2017")
+    paths = get_coco_split(split="val", year="2017")
     coco = CocoLoader(paths, transform=None)
 
     item = coco[0]

@@ -12,6 +12,27 @@ from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskG
 import yaml
 
 
+def prepare_sam(device, model, cfg=None):
+    """
+    Load SAM-1 predictor and model itself, before passing them to wrappers for example
+    config: model_type and path to checkpoint, if nto provided, b is used
+    """
+    config_path = (
+        cfg.sam_path_config
+        if cfg is not None
+        else "./config/segmentation/other/sam1_paths.yaml"
+    )
+    with open(config_path, "r") as f:
+        subconfig = yaml.safe_load(f)[model]
+    sam_checkpoint = subconfig["path"]
+    model_type = subconfig["model_type"]
+
+    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+    sam.to(device=device)
+
+    return SamPredictor(sam), sam
+
+
 class SamWrapper(BaseSegmentWrapper):
     """
     Does not extend sam class, but uses it to infer masks and generate automatic masks
@@ -22,10 +43,8 @@ class SamWrapper(BaseSegmentWrapper):
 
     def __init__(self, device="cuda", model="b", cfg: DictConfig = None):
         assert device in ["cpu", "cuda"]
-        assert model in ["b", "h"]
-
         self.device = device
-        self.sam_predictor, self.sam = prepare_sam(device=device, config=cfg)
+        self.sam_predictor, self.sam = prepare_sam(device=device, cfg=cfg, model=model)
         self.resize_transform = ResizeLongestSide(self.get_image_size())
 
     def infer_masks(self, items, boxes=None, points=None, point_labels=None):
@@ -153,24 +172,12 @@ class AutomaticSam(SamAutomaticMaskGenerator):
         return generated_masks_dicts
 
 
-def prepare_sam(device, config):
-    """
-    Load SAM-1 predictor and model itself, before passing them to wrappers for example
-    config: model_name and path to checkpoint
-    """
-    sam_checkpoint = config["path"]
-    model_type = config["model_type"]
-
-    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-    sam.to(device=device)
-
-    return SamPredictor(sam), sam
-
-
 def test_sam1_wrappers():
     print("\nTesting sam1 wrapper:")
 
-    sam_wrapper = SamWrapper(device="cuda", model="b")
+    sam_wrapper = SamWrapper(
+        device="cuda", model="b"
+    )  # without config now? just want default b model
     image = np.array(torch.randn(480, 640, 3))
     box = torch.tensor([[0, 0, 100, 100]])
 
