@@ -1,31 +1,23 @@
-segmentation: 
-  name: sam1 #sam1, sam2, None
-  model: b  # b,h = base or huge
+defaults:
+  - dataset: coco # No alternative currently 
+  - detector: detector_base # detector name in the other file
+  - segmentation: sam1 # sam2 in the future
 
-detector:
-  name:  gt_boxes
-# gt_boxes , gt_boxes_middle, None
+  - _self_
+  - override hydra/hydra_logging: disabled  
+  - override hydra/job_logging: disabled  
+  
  
-dataset: 
-  name: coco 
-  split: val  # train or val
-  year: 2017
-
-
-batchsize: 6  # h4, b6 on RTX4000, b8,h6 on A100
-max_batch: 100 # None or integer
-save_results: True
+batch_size: 6  # h4, b6 on RTX4000, b8,h6 on A100
+max_batch: 3 # None or integer
+save_results: False
 print_results: True
 save_path: ./out/pipeline_results/
 
 
-#disable saving results and logging, dont touch
+#disable saving results and logging
 hydra:  
   output_subdir: null  
   run:  
     dir: .
 
-defaults:  
-- _self_  
-- override hydra/hydra_logging: disabled  
-- override hydra/job_logging: disabled  

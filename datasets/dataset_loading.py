@@ -23,12 +23,13 @@ def box_coco_to_sam(coco_box):
     )
 
 
-def get_coco_split(split: str = "train", year: str = "2017"):
+def get_coco_split(split: str = "train", year: str = "2017", root=""):
     """
     Returns the paths of the COCO dataset split for a given year.
     Args:
         split (str, optional): The split of the dataset. Defaults to "train".
         year (str, optional): The year of the dataset. Defaults to "2017".
+        root is the root directory of datasets
     Returns:
         tuple: A tuple containing the image path and annotation path.
     """
@@ -36,7 +37,6 @@ def get_coco_split(split: str = "train", year: str = "2017"):
     assert split in ["train", "val"]
     assert year in ["2014", "2017"]
 
-    root = "./datasets/COCO"  # load from conf??
     annotation_path = os.path.join(root, "annotations")
     type_ann = "instances"  # instances, captions, person_keypoints
 

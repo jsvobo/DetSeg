@@ -7,9 +7,9 @@ from omegaconf import DictConfig, OmegaConf
 import pprint
 
 import utils
-from datasets.dataset_loading import CocoLoader, get_coco_split
-import segmentation_models
+import datasets.dataset_loading as datasets
 import detection_models
+import segmentation_models
 from evaluator import Evaluator
 
 from torchmetrics import MetricCollection
@@ -19,26 +19,12 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 
 # dicts with implemented models, to specify class from reading confif as string
-segmentation_dict = {
-    "sam1": segmentation_models.SamWrapper,
-    "sam2": None,
-}  # TODO: SAM-2, HQ or FAST sam?
-detection_dict = {
-    "gt_boxes": detection_models.GTboxDetector,
-    "gt_boxes_middle": detection_models.GTboxDetectorMiddle,  # Add other versions. CA, with points from attention etc.
-}
-dataset_dict = {
-    "coco": {
-        "loader": CocoLoader,
-        "split_fn": get_coco_split,
-    },  # Loader class and function to get split paths
-}
 
 
 def hardcoded_config():
     # for testing purposes, dummy config.
     # change if the config structure changes, otherwise tests wont work
-    return DictConfig(
+    return DictConfig(  # rewrite to load one special config for testing
         {
             "dataset": {"name": "coco", "split": "val", "year": 2017},
             "detector": {"name": "gt_boxes_middle"},
@@ -59,36 +45,36 @@ class Pipeline:
 
     def prepare_dataset(self, cfg: DictConfig):
         # prepare dataset from config
-        dataset_name = cfg.name
         split = cfg.split
         year = cfg.year
+        root = cfg.root
 
-        dataset_class = dataset_dict[dataset_name][
-            "loader"
-        ]  # from predefined dict above
-        get_path = dataset_dict[dataset_name]["split_fn"]
+        dataset_class = cfg.class_name
+        get_path = cfg.split_fn
 
-        dataset = dataset_class(get_path(split=split, year=year), transform=None)
+        path = getattr(datasets, get_path)(split=split, year=year, root=root)
+        dataset = getattr(datasets, dataset_class)(path, transform=None)
         return dataset
 
     def prepare_det(self, cfg: DictConfig):
         # prepare detection model based on config
-        model_name = cfg.name
+        model_name = cfg.class_name
         if model_name == "None":
-            model_det = None
+            model_det = detection_models.GTboxDetector()
         else:
-            model_det = detection_dict[model_name]()
+            model_det = getattr(detection_models, model_name)()
         return model_det
 
     def prepare_seg(self, cfg: DictConfig, device: str):
         # prepare segmentation model based on config
-        model_name = cfg.name
+        print(cfg)
+        model_name = cfg.class_name
         if model_name == "None":
             segmentation_model = None
         else:
-            seg_class = segmentation_dict[model_name]
-            sam_size = cfg.model
-            segmentation_model = seg_class(device=device, model=sam_size)
+            segmentation_model = getattr(segmentation_models, model_name)(
+                device=device, cfg=cfg.sam_model
+            )
         return segmentation_model
 
     def prepar_cfg(self, cfg: DictConfig):
@@ -137,7 +123,7 @@ class Pipeline:
 
         # loader from dataset
         data_loader = dataset.instantiate_loader(
-            batch_size=cfg.batchsize, num_workers=4
+            batch_size=cfg.batch_size, num_workers=4
         )
 
         # run the evaluation

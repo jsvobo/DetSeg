@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import utils
+from omegaconf import DictConfig, OmegaConf
 
 import segmentation_models.utils.sam_sequential as sam_sequential
 import segmentation_models.utils.sam_batching as sam_batching
@@ -12,13 +13,19 @@ import yaml
 
 
 class SamWrapper(BaseSegmentWrapper):
+    """
+    Does not extend sam class, but uses it to infer masks and generate automatic masks
+    Can have other segmentation models. Important functions are outlined in the base class
+    Use infer_masks to get masks for a list of single images or infer_batch for inferrence of multiple prompts and multiple images.
+    infer_masks is sequential in a sense, to be used for visualisations.
+    """
 
-    def __init__(self, device="cuda", model="b"):
+    def __init__(self, device="cuda", model="b", cfg: DictConfig = None):
         assert device in ["cpu", "cuda"]
         assert model in ["b", "h"]
 
         self.device = device
-        self.sam_predictor, self.sam = prepare_sam(model=model, device=device)
+        self.sam_predictor, self.sam = prepare_sam(device=device, config=cfg)
         self.resize_transform = ResizeLongestSide(self.get_image_size())
 
     def infer_masks(self, items, boxes=None, points=None, point_labels=None):
@@ -56,9 +63,9 @@ class SamWrapper(BaseSegmentWrapper):
         index_list = []
 
         # prepare sam_batched_inputs based on prompts
-        for j in range(len(images)):
-            img = images[j]
-            boxes_for_image = boxes[j]
+        for image_idx in range(len(images)):
+            img = images[image_idx]
+            boxes_for_image = boxes[image_idx]
             resulting_masks.append(torch.Tensor([]))
 
             if len(boxes_for_image) == 0:
@@ -79,9 +86,9 @@ class SamWrapper(BaseSegmentWrapper):
 
             if point_coords is not None:
                 # reshape to correct format BxNx2 and BxN
-                coords = torch.Tensor([point_coords[j]])
+                coords = torch.Tensor([point_coords[image_idx]])
                 points_for_image = coords.permute(1, 0, 2).to(self.device)
-                labels = torch.Tensor([point_labels[j]])
+                labels = torch.Tensor([point_labels[image_idx]])
                 labels_for_image = labels.T.to(self.device)
 
                 # add to dict
@@ -91,7 +98,7 @@ class SamWrapper(BaseSegmentWrapper):
                 dict_img["point_labels"] = labels_for_image
 
             sam_batched_inputs.append(dict_img)
-            index_list.append(j)
+            index_list.append(image_idx)
 
         # None came through
         if sam_batched_inputs == []:
@@ -146,21 +153,13 @@ class AutomaticSam(SamAutomaticMaskGenerator):
         return generated_masks_dicts
 
 
-def prepare_sam(
-    model,
-    device,
-):
+def prepare_sam(device, config):
     """
-    Load SAM-1 predictor and model itself
+    Load SAM-1 predictor and model itself, before passing them to wrappers for example
+    config: model_name and path to checkpoint
     """
-    assert model in ["b", "h"]
-
-    with open("segmentation_models/config/sam1_conf.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    model_dict = config[model]
-
-    sam_checkpoint = model_dict["path"]
-    model_type = model_dict["model_type"]
+    sam_checkpoint = config["path"]
+    model_type = config["model_type"]
 
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     sam.to(device=device)
