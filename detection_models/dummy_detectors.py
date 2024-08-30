@@ -4,7 +4,7 @@ import numpy as np
 
 
 class BaseDetectorWrapper:
-    def __init__(self, cfg, device=None, all_classes=None):
+    def __init__(self, cfg=None, device=None, all_classes=None):
         pass
 
     def detect_batch(self, images, metadata):

@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from math import ceil as cl
 
 
 def get_IoU_masks(gt_mask, mask):

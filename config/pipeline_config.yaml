@@ -9,7 +9,7 @@ defaults:
   
  
 batch_size: 6  # h4, b6 on RTX4000, b8,h6 on A100
-max_batch: 3 # None or integer
+max_batch: 10 # None or integer
 save_results: False
 print_results: True
 save_path: ./out/pipeline_results/

@@ -55,6 +55,26 @@ class CocoLoader(CocoDetection):
             filepaths[1],
             transform=transform,
         )
+        self.new_class_ids = [
+            index for index, previsous in enumerate(self.coco.cats.keys())
+        ]
+        self.old_to_new_cat_translation_table = {
+            old_id: new_id
+            for new_id, old_id in zip(self.new_class_ids, self.coco.cats.keys())
+        }
+        self.new_to_old_cat_translation_table = {
+            new_id: old_id
+            for new_id, old_id in zip(self.new_class_ids, self.coco.cats.keys())
+        }
+
+    def get_cat_keys(self):  # new categories, without gaps
+        return self.new_class_ids
+
+    def translate_to_new_catID(self, catID):  # from old category to its new category
+        return self.old_to_new_cat_translation_table[catID]
+
+    def translate_to_old_catID(self, catID):  # from new category to its old category
+        return self.new_to_old_cat_translation_table[catID]
 
     def get_api(self):
         return self.coco
@@ -80,7 +100,8 @@ class CocoLoader(CocoDetection):
             boxes.append(box)
             mask = self.decode_ann(ann)
             masks.append(np.uint8(mask))
-            cats.append(ann["category_id"])
+            cats.append(self.translate_to_new_catID(ann["category_id"]))
+            # to normalize categories. base cats have a lot of gaps
 
         boxes = np.array(boxes)
         masks = np.array(masks)
@@ -99,7 +120,11 @@ class CocoLoader(CocoDetection):
         }
 
     def translate_catIDs(self, catIDs):
-        return [self.coco.cats[int(catID)]["name"] for catID in catIDs]
+        return [
+            self.coco.cats[self.translate_to_old_catID(int(catID))]["name"]
+            for catID in catIDs
+            # again need to map to original catIDs and return the names
+        ]
 
     def instantiate_loader(self, batch_size=4, num_workers=4):
 
@@ -134,6 +159,7 @@ def test_coco_loading():
 
     print(coco.translate_catIDs([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
     print(coco.get_classes())
+    print(coco.get_cat_keys())
     print("Coco loading test passed!")
 
 

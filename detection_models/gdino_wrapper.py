@@ -17,8 +17,11 @@ class GrDINO(BaseDetectorWrapper):
             self.text_prompt = ". ".join(self.all_classes)
             self.all_classes = self.all_classes.copy()
             self.all_classes.append("")
+
+            print(self.all_classes)
+            print(self.text_prompt)
         else:
-            self.text_prompt = "an item. an object. hidden object. an item. a thing. stuff and entity. small object. large object."
+            self.text_prompt = "an item. an object. hidden object. entity. a thing. stuff. small object. large object. hidden object"
 
     def classes_to_indices(self, list_of_classes):
         if not self.got_classes:
@@ -66,13 +69,12 @@ class GroundingDinoTiny(GrDINO):
             target_sizes=[target_size],
         )
         results = results[0]
-        results["boxes"] = results["boxes"].cpu()
+        results["boxes"] = torch.round(results["boxes"].cpu()).type(torch.int16)
         return results
 
     def detect_batch(self, images, metadata=None):
         """
         images: list of images
-        metadata: list of metadata for each image containing boxes
         """
         detected_boxes = []
         detected_classes = []

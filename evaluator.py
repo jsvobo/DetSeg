@@ -14,20 +14,44 @@ import segmentation_models
 import detection_models
 
 
+def boxes_to_masks(boxes, mask_shape):
+    """
+    Convert boxes in formax x0,y0,x1,y1 to uint8 mask for calculating IoU. need to know the full shape
+    """
+    masks = []
+    for box in boxes:
+        mask = torch.zeros(mask_shape, dtype=torch.uint8)
+        x1, y1, x2, y2 = box
+        mask[y1:y2, x1:x2] = 1
+        masks.append(mask)
+    return masks
+
+
 def to_dict_for_map(list_of_list_of_boxes, list_of_list_of_classes):
     """
-    Convert a list of lists of boxes for one image into a list of dictionaries.
+    This function can take boxes or masks and does the same. Only difference is the dict keys
+
+    Convert a list of lists of boxes (or masks) for one image into a list of dictionaries.
     Args:
         list_of_list_of_boxes (list): A list of lists containing boxes for one image.
     Returns:
         list: A list of dictionaries, where each dictionary represents a box with the following keys:
-            - "boxes": The list of boxes.
+            - "boxes": The list of boxes. (alternatively "masks" is returned)
             - "labels": A tensor of zeros with the same length as the list of boxes.
             - "scores": A tensor of ones with the same length as the list of boxes.
+
+    This is needed for the MeanAveragePrecision class from torchmetrics to work right
     """
-    print(list_of_list_of_boxes)
+
+    # sometimes empty boxes come.
+    #  this  would not be a problem,but we need to know if we have masks or boxes?
+    for list_for_image in list_of_list_of_boxes:
+        if len(list_for_image) != 0:
+            last_size = len(list_for_image[0])
+            break  # need to find the first non-empty list, its last size determines box or mask
+
     key_type = (
-        "boxes" if len(list_of_list_of_boxes[0][0]) == 4 else "masks"
+        "boxes" if last_size == 4 else "masks"
     )  # last dim is 4 -> boxes, else masks
 
     return [
@@ -125,15 +149,6 @@ class Evaluator:
         length = len(gt)  # for now just take the same amount of boxes and call it a day
         return inferred[:length]
 
-    def boxes_to_masks(self, boxes, mask_shape):
-        masks = []
-        for box in boxes:
-            mask = torch.zeros(mask_shape, dtype=torch.uint8)
-            x1, y1, x2, y2 = box
-            mask[y1:y2, x1:x2] = 1
-            masks.append(mask)
-        return masks
-
     def prepare_gt(self, metadata):
         gt_boxes = [instance["boxes"] for instance in metadata]
         gt_masks = [instance["masks"].type(torch.uint8) for instance in metadata]
@@ -171,8 +186,8 @@ class Evaluator:
                 continue
 
             # convert boxes to masks using original shape
-            box_list_as_mask = self.boxes_to_masks(box_list, shape)
-            gt_box_list_as_mask = self.boxes_to_masks(gt_box_list, shape)
+            box_list_as_mask = boxes_to_masks(box_list, shape)
+            gt_box_list_as_mask = boxes_to_masks(gt_box_list, shape)
 
             # pair boxes together
             for gt, inferred in zip(
@@ -220,6 +235,10 @@ class Evaluator:
                 self.IoU_masks.append(IoU.cpu())
 
     def get_metrics(self):
+        """
+        Do final calculation of torchmetrics classes and wrap the results in a dict
+        returns result dict, box and mask IoU arrays
+        """
         assert self.evaluated
         result_dict = {
             # weighted avg IoUs and equal weight (mean) IoUs
@@ -283,10 +302,10 @@ class Evaluator:
             images = list(batch[0])
             metadata = list(batch[1])
 
-            # Calculate where_zero array, 1 if no boxes, 0 if boxes
+            # filter out images with no GT boxes (and masks)
             images, metadata = self.filter_images(images, metadata)
             if len(images) == 0:
-                continue  # no boxes in this batch at all
+                continue  # no boxes in this batch at all, sad :((
 
             # list of list of mask/boxes as GT
             gt_boxes, gt_masks, gt_classes = self.prepare_gt(metadata)
