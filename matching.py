@@ -16,7 +16,10 @@ def matching_fn(gt, dt, dt_scores, threshold=0.5):
     # return DT for every GT in the list
     # return IoUs with the matches :))
 
-    matched_indices = -np.ones(len(gt), dtype=int)
+    # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/cocoeval.py
+
+    match_indices = -np.ones(len(gt), dtype=np.int32)
+    match_IoUs = np.zeros(len(gt), dtype=np.float32)
     gt_list = gt.copy()
     dt_list = dt.copy()
 
@@ -24,16 +27,23 @@ def matching_fn(gt, dt, dt_scores, threshold=0.5):
     indices_detections = np.argsort(dt_scores)
     dt_list = dt_list[indices_detections]
 
-    for i, dt_box in enumerate(dt_list):
+    for dt_box in dt_list:
         # calculate IoU against all GT boxes in the list
         ious = iou_against_one_box(one=dt_box, multiple_boxes=gt_list)
+        # each time the list is smaller, so we dont match twice
 
-        # sort IoUs and store GT order
-        indices_IoU = np.argsort(ious)
-        for iou in ious:
-            if iou <= threshold:
-                continue  # remaining IoUs are low
+        # find highest IoU index (which GT is the best?)
+        index_highest = np.argmax(ious)
+        iou_best = ious[index_highest]
+        gt_best = gt_list[index_highest]
 
-        max_iou_idx = np.argmax(ious)
-        matched_indices[max_iou_idx] = i
-        gt_list.pop(max_iou_idx)
+        if iou_best <= threshold:
+            continue  # remaining IoUs are too low, no match here
+
+        index_of_gt = gt.index(gt_best)
+        match_indices[index_of_gt] = dt_box  # TODO add score?
+        match_IoUs[index_of_gt] = iou_best
+
+        gt_list.pop(index_of_gt)  # GT is matched, remove from list
+
+    return match_indices, match_IoUs
