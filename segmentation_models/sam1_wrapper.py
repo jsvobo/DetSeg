@@ -15,7 +15,7 @@ import yaml
 def prepare_sam(device, model, cfg=None):
     """
     Load SAM-1 predictor and model itself, before passing them to wrappers for example
-    config: model_type and path to checkpoint, if nto provided, b is used
+    config: model_type and path to checkpoint
     """
     config_path = (
         cfg.sam_path_config

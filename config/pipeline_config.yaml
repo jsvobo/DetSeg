@@ -1,6 +1,6 @@
 defaults:
   - dataset: coco # No alternative currently 
-  - detector: detector_base # detector name in the other file
+  - detector: gdino_tiny  # gdino_tiny , gt_detector_middle, gt_detector
   - segmentation: sam1 # sam2 in the future
 
   - _self_

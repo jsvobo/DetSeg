@@ -25,6 +25,7 @@ def to_dict_for_map(list_of_list_of_boxes, list_of_list_of_classes):
             - "labels": A tensor of zeros with the same length as the list of boxes.
             - "scores": A tensor of ones with the same length as the list of boxes.
     """
+    print(list_of_list_of_boxes)
     key_type = (
         "boxes" if len(list_of_list_of_boxes[0][0]) == 4 else "masks"
     )  # last dim is 4 -> boxes, else masks
@@ -292,7 +293,7 @@ class Evaluator:
 
             # detection
             detected_boxes, attention_points, point_labels, detection_classes = (
-                self.model_det.detect_batch(images, metadata, all_classes)
+                self.model_det.detect_batch(images, metadata)
             )
 
             # detection metrics

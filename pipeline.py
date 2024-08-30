@@ -36,13 +36,15 @@ class Pipeline:
         dataset = getattr(datasets, dataset_class)(path, transform=None)
         return dataset
 
-    def prepare_det(self, cfg: DictConfig):
+    def prepare_det(self, cfg: DictConfig, all_classes):
         # prepare detection model based on config
         model_name = cfg.class_name
         if model_name == "None":
             model_det = detection_models.GTboxDetector()
         else:
-            model_det = getattr(detection_models, model_name)()
+            model_det = getattr(detection_models, model_name)(
+                cfg=cfg, all_classes=all_classes
+            )
         return model_det
 
     def prepare_seg(self, cfg: DictConfig, device: str):
@@ -80,11 +82,12 @@ class Pipeline:
         save_results = cfg.save_results
         print_results = cfg.print_results
 
-        # load detector
-        detector = self.prepare_det(cfg.detector)
-
         # load dataset
         dataset = self.prepare_dataset(cfg.dataset)
+        all_classes = dataset.get_classes()
+
+        # load detector
+        detector = self.prepare_det(cfg.detector, all_classes=all_classes)
 
         # load segmentation model
         segmentation_model = self.prepare_seg(cfg.segmentation, device)

@@ -53,15 +53,20 @@ def plot_box(box, ax, color="red", linewidth=2):
 
 def grid_masks_boxes(
     image,
-    masks,
-    boxes,
+    masks=None,
+    boxes=None,
     titles=None,
     scale=8,
     linewidth=3,
     points=None,
     point_labels=None,
 ):
-    num_imgs = len(masks) + 1
+    assert (masks is not None) or (boxes is not None)
+    if masks is not None:
+        num_imgs = len(masks) + 1
+    else:
+        num_imgs = len(boxes) + 1
+
     fig, axes = plt.subplots(1, num_imgs, figsize=(num_imgs * scale, scale))
     axes = axes.flatten()
 
@@ -86,8 +91,10 @@ def grid_masks_boxes(
                     coords=points[index], labels=point_labels[index], ax=ax
                 )
 
-        utils.plot_box(boxes[index], ax, linewidth=linewidth)
-        ax.imshow(1 * masks[index], cmap="jet", alpha=0.5)
+        if boxes is not None:
+            utils.plot_box(boxes[index], ax, linewidth=linewidth)
+        if masks is not None:
+            ax.imshow(1 * masks[index], cmap="jet", alpha=0.5)
         # plot this last so the bbox is on top of the mask and not in the edges
 
     plt.show()
@@ -95,8 +102,8 @@ def grid_masks_boxes(
 
 def print_masks_boxes(
     image,
-    masks,
-    boxes,
+    masks=None,
+    boxes=None,
     linewidth=3,
     scale=8,
     opacity=0.8,
