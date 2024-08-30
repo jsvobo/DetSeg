@@ -14,9 +14,23 @@ import segmentation_models
 import detection_models
 
 
+# TODO: move to utils??
+def filter_images(images, metadata):
+    # Calculate where_zero array, 1 if no boxes, 0 if boxes
+    filtered_images = []
+    filtered_metadata = []
+
+    for j in range(len(images)):
+        if len(metadata[j]["boxes"]) == 0:  # no boxes?
+            continue
+        filtered_images.append(images[j])
+        filtered_metadata.append(metadata[j])
+    return filtered_images, filtered_metadata
+
+
 def boxes_to_masks(boxes, mask_shape):
     """
-    Convert boxes in formax x0,y0,x1,y1 to uint8 mask for calculating IoU. need to know the full shape
+    Convert list of boxes in formax x0,y0,x1,y1 to uint8 mask for calculating IoU. need to know the full shape
     """
     masks = []
     for box in boxes:
@@ -49,6 +63,7 @@ def to_dict_for_map(list_of_list_of_boxes, list_of_list_of_classes):
         if len(list_for_image) != 0:
             last_size = len(list_for_image[0])
             break  # need to find the first non-empty list, its last size determines box or mask
+        # all empty could happen and in that case we might have a problem, TODO
 
     key_type = (
         "boxes" if last_size == 4 else "masks"
@@ -70,6 +85,7 @@ class Evaluator:
     """
     Class for evaluating object detection and segmentation models.
     Args:
+        cfg: config dict
         model_seg (optional): The segmentation model to be evaluated.
         device (str, optional): The device to be used for evaluation. Defaults to "cuda".
         seg_pairwise_metrics (optional): The pairwise metrics to be calculated for segmentation.
@@ -98,6 +114,7 @@ class Evaluator:
 
     def __init__(
         self,
+        cfg,
         model_seg=None,
         device="cuda",
         seg_pairwise_metrics=None,
@@ -115,6 +132,7 @@ class Evaluator:
         self.IoU_boxes = []
         self.IoU_masks = []
         self.evaluated = False
+        self.cfg = cfg
 
         # pairwise metrics, wIoU
         self.seg_IoU_metric = JaccardIndex("binary").to(device)
@@ -123,7 +141,7 @@ class Evaluator:
         # batch metrics, mAP, but CA/classless
         self.det_map_classless = MeanAveragePrecision(
             iou_type="bbox",
-            average="macro",
+            average="micro",
             class_metrics=False,
         )
         self.seg_map_classless = MeanAveragePrecision(
@@ -132,9 +150,9 @@ class Evaluator:
             class_metrics=False,
         )
 
-        # batch metrics, mAP, classful, per class, extended output
+        # batch metrics, mAP, classful, per class, maybe extended output
         self.seg_batch_classful = MeanAveragePrecision(
-            iou_type="segm", average="micro", class_metrics=True, extended_summary=False
+            iou_type="segm", average="macro", class_metrics=True, extended_summary=False
         )
         self.det_batch_classful = MeanAveragePrecision(
             iou_type="bbox", average="macro", class_metrics=True, extended_summary=False
@@ -163,18 +181,22 @@ class Evaluator:
         Needs image shapes when converting the boxes to masks for jaccard index calculation.
         Args:
             detected_classes (list): List of inferred classes, as they come from boxes
+            gt_boxes (list): List of lists of ground truth boxes.
             gt_class (list): List of ground truth classes.
             detected_boxes (list): List of lists of inferred boxes.
-            gt_boxes (list): List of lists of ground truth boxes.
         Returns:
             None
         """
-
+        # this is a but inefficien, but works for now
+        zeros_as_gt = [[0 for _ in gt_box_list] for gt_box_list in gt_classes]
+        #       to properly register classless metrics, we invent a new dummy GT classes list
+        #       this means everything is in one class
         dict_detected = to_dict_for_map(detected_boxes, detected_classes)
         dict_gt = to_dict_for_map(gt_boxes, gt_classes)
+        dict_gt_classless = to_dict_for_map(gt_boxes, zeros_as_gt)
 
         # M:N metrics
-        self.det_map_classless.update(dict_detected, dict_gt)
+        self.det_map_classless.update(dict_detected, dict_gt_classless)
         self.det_batch_classful.update(dict_detected, dict_gt)
 
         # 1:1 metrics
@@ -186,13 +208,13 @@ class Evaluator:
                 continue
 
             # convert boxes to masks using original shape
-            box_list_as_mask = boxes_to_masks(box_list, shape)
-            gt_box_list_as_mask = boxes_to_masks(gt_box_list, shape)
+            box_list_as_mask = uils.boxes_to_masks(box_list, shape)
+            gt_box_list_as_mask = uils.boxes_to_masks(gt_box_list, shape)
 
             # pair boxes together
             for gt, inferred in zip(
-                gt_box_list_as_mask,
-                box_list_as_mask,
+                box_list,
+                gt_box_list,
             ):
                 IoU = self.det_IoU_metric.forward(
                     inferred.to(self.device), gt.to(self.device)
@@ -216,11 +238,19 @@ class Evaluator:
         Returns:
             None
         """
+        # this is a but inefficien, but works for now (same as in boxes)
+        zeros_as_gt = [[0 for _ in gt_box_list] for gt_box_list in gt_classes]
+        #       to properly register classless metrics, we invent a new dummy GT classes list
+        #       this means everything is in one class
+        # there probably is a way to refactor hese 2 functions into one intelligent function for boxes and masks,
+        #           no time rn!, TODO later
+
         dict_detected = to_dict_for_map(inferred_masks, inferred_classes)
         dict_gt = to_dict_for_map(gt_masks, gt_classes)
+        dict_gt_classless = to_dict_for_map(gt_boxes, zeros_as_gt)
 
         # M:N metrics
-        self.seg_map_classless.update(dict_detected, dict_gt)
+        self.seg_map_classless.update(dict_detected, dict_gt_classless)
         self.seg_batch_classful.update(dict_detected, dict_gt)
 
         # 1:1 metrics
@@ -264,19 +294,8 @@ class Evaluator:
             result_dict,
             np.array(self.IoU_masks),
             np.array(self.IoU_boxes),
+            np.array([]),  # TODO: for now
         )
-
-    def filter_images(self, images, metadata):
-        # Calculate where_zero array, 1 if no boxes, 0 if boxes
-        filtered_images = []
-        filtered_metadata = []
-
-        for j in range(len(images)):
-            if len(metadata[j]["boxes"]) == 0:  # no boxes?
-                continue
-            filtered_images.append(images[j])
-            filtered_metadata.append(metadata[j])
-        return filtered_images, filtered_metadata
 
     def evaluate(self, data_loader, savepath=None, max_batch=None):
         """
@@ -293,9 +312,6 @@ class Evaluator:
             None
         """
 
-        # if classes are needed for detection (DINO etc.)
-        all_classes = data_loader.dataset.get_classes()
-
         for i, batch in tqdm(enumerate(data_loader)):
             if (max_batch is not None) and (i > max_batch):
                 break
@@ -303,14 +319,14 @@ class Evaluator:
             metadata = list(batch[1])
 
             # filter out images with no GT boxes (and masks)
-            images, metadata = self.filter_images(images, metadata)
+            images, metadata = filter_images(images, metadata)
             if len(images) == 0:
                 continue  # no boxes in this batch at all, sad :((
 
-            # list of list of mask/boxes as GT
+            # list of list of mask/boxes and classes as GT
             gt_boxes, gt_masks, gt_classes = self.prepare_gt(metadata)
 
-            # detection
+            # detection module. attention points and labels possible with detection classes
             detected_boxes, attention_points, point_labels, detection_classes = (
                 self.model_det.detect_batch(images, metadata)
             )

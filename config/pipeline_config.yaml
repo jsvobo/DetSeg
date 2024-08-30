@@ -13,7 +13,8 @@ max_batch: 10 # None or integer
 save_results: False
 print_results: True
 save_path: ./out/pipeline_results/
-
+evaluator: 
+  use_class_prompts_det: True
 
 #disable saving results and logging
 hydra:  

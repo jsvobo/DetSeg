@@ -18,9 +18,22 @@ from torchmetrics.detection.iou import IntersectionOverUnion
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 
+alternative_classes_list = [
+    "item",
+    "object",
+    "hidden object",
+    "entity",
+    "thing",
+    "stuff",
+    "small object",
+    "large object",
+]
+
+
 class Pipeline:
     def __init__(self, cfg: DictConfig):
         cfg_parsed = self.prepar_cfg(cfg)
+        self.cfg = cfg_parsed
         self.run(cfg_parsed)
 
     def prepare_dataset(self, cfg: DictConfig):
@@ -35,6 +48,13 @@ class Pipeline:
         path = getattr(datasets, get_path)(split=split, year=year, root=root)
         dataset = getattr(datasets, dataset_class)(path, transform=None)
         return dataset
+
+    def prepare_class_list(self, cfg: DictConfig, dataset):
+        if cfg.use_class_prompts_det:  # if not, alternative prompts are used
+            all_classes = dataset.get_classes()
+        else:
+            all_classes = alternative_classes_list  # defined above, move to config?
+        return all_classes
 
     def prepare_det(self, cfg: DictConfig, all_classes):
         # prepare detection model based on config
@@ -68,14 +88,21 @@ class Pipeline:
     def print_results(self, result_dict):
         mean_seg_IoU = result_dict["mean seg IoU"]
         weighed_seg_IoU = result_dict["weighted seg IoU"]
+        mean_det_IoU = result_dict["mean det IoU"]
+        weighed_det_IoU = result_dict["weighted det IoU"]
 
         print("\nResults:")
-        print(f"Mean segmentation IoU: {round(float(mean_seg_IoU),3)}")
-        print(f"Weighted segmentation IoU: {round(float(weighed_seg_IoU),3)}")
+        print("Segmentation metrics:")
+        print(f"    Mean IoU: {round(float(mean_seg_IoU),3)}")
+        print(f"    WeightedIoU: {round(float(weighed_seg_IoU),3)}")
+        print("Detection metrics:")
+        print(f"    Mean IoU: {round(float(mean_det_IoU),3)}")
+        print(f"    Weighted IoU: {round(float(weighed_det_IoU),3)}")
 
-        pprint.pprint(
-            result_dict["classless mAP - segmentation"]
-        )  # add more dicts here?
+        print("\nClassless mAP:")
+        pprint.pprint(result_dict["classless mAP - detection"])  # add more dicts here?
+        if self.cfg.segmentation.class_name != "None":
+            pprint.pprint(result_dict["classless mAP - segmentation"])
 
     def run(self, cfg: dict):
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -84,7 +111,8 @@ class Pipeline:
 
         # load dataset
         dataset = self.prepare_dataset(cfg.dataset)
-        all_classes = dataset.get_classes()
+        # if classes are needed for detection (DINO etc.)
+        all_classes = self.prepare_class_list(cfg.evaluator, dataset=dataset)
 
         # load detector
         detector = self.prepare_det(cfg.detector, all_classes=all_classes)
@@ -97,6 +125,7 @@ class Pipeline:
 
         # Instantiate the Evaluator with the requested parameters
         evaluator = Evaluator(
+            cfg=cfg.evaluator,
             device=device,
             model_det=detector,
             model_seg=segmentation_model,
@@ -108,13 +137,10 @@ class Pipeline:
             batch_size=cfg.batch_size, num_workers=4
         )
 
-        # run the evaluation
+        # run the evaluation and collect results
         evaluator.evaluate(data_loader, max_batch=cfg.max_batch)
-        result_dict, array_masks, array_boxes = (
-            evaluator.get_metrics()
-        )  # collect results
+        result_dict, array_masks, array_boxes, index_array = evaluator.get_metrics()
 
-        # print results
         if print_results:
             self.print_results(result_dict)
 
@@ -122,8 +148,9 @@ class Pipeline:
         if save_results:
             utils.save_results(
                 result_dict=result_dict,
-                array_masks=array_masks,
+                array_masks=array_masks,  # array of IoU for masks and boxes
                 array_boxes=array_boxes,
+                index_array=index_array,
                 cfg=cfg,
             )
 

@@ -9,28 +9,15 @@ from omegaconf import DictConfig, OmegaConf
 
 class GrDINO(BaseDetectorWrapper):
 
-    def compose_text_prompt(self):
-        self.got_classes = False
-
-        if self.all_classes is not None:
-            self.got_classes = True
-            self.text_prompt = ". ".join(self.all_classes)
-            self.all_classes = self.all_classes.copy()
-            self.all_classes.append("")
-
-            print(self.all_classes)
-            print(self.text_prompt)
-        else:
-            self.text_prompt = "an item. an object. hidden object. entity. a thing. stuff. small object. large object. hidden object"
+    def compose_text_prompt(self, all_classes):
+        self.text_prompt = ".".join(all_classes)
+        self.all_classes = all_classes.copy()
+        self.all_classes.append("")
 
     def classes_to_indices(self, list_of_classes):
-        if not self.got_classes:
-            return [0 for c in list_of_classes]
         return [self.all_classes.index(c) for c in list_of_classes]
 
     def indices_to_classes(self, list_of_indices):
-        if not self.got_classes:
-            return ["" for i in list_of_indices]
         return [self.all_classes[i] for i in list_of_indices]
 
 
@@ -44,15 +31,18 @@ class GroundingDinoTiny(GrDINO):
             self.model_id
         ).to(self.device)
 
-        self.all_classes = all_classes
-        self.compose_text_prompt()
+        # prepare prompt for grounding dino
+        self.compose_text_prompt(all_classes)
 
-        if cfg is None:
-            cfg = OmegaConf.load("./config/detector/gdino_tiny.yaml")
+        if (
+            cfg is None
+        ):  # if not in a pipeline, but in a notebook, load a "manual" config from a specific loaction
+            cfg = OmegaConf.load("./config/detector/gdino_manual.yaml")
         self.box_threshold = cfg["box_threshold"]
         self.text_threshold = cfg["text_threshold"]
 
     def detect_individual(self, image):
+        # image is a single image, returns detected boxes
         text = self.text_prompt
         inputs = self.processor(images=image, text=text, return_tensors="pt").to(
             self.device
@@ -69,39 +59,39 @@ class GroundingDinoTiny(GrDINO):
             target_sizes=[target_size],
         )
         results = results[0]
-        results["boxes"] = torch.round(results["boxes"].cpu()).type(torch.int16)
+        results["boxes"] = torch.round(results["boxes"].cpu()).type(torch.int32)
+        return results
+
+    def detect_boxes(self, items):
+        # takes list of item, as returned by dataset loader(s)
+        results = []
+        for item in items:
+            image = item["image"]
+            output = self.detect_individual(image)
+            results.append(
+                {"boxes": output["boxes"], "labels": [0 for _ in output["labels"]]}
+            )
         return results
 
     def detect_batch(self, images, metadata=None):
         """
         images: list of images
+        right now sequential, but grounding dino has some batching options for the future.
+        return format same is the pipeline needs to work
+        detected boxes,attention points for each box, labels of those points, class detected for each box
         """
         detected_boxes = []
         detected_classes = []
-        detected_class_names = []
         for image in images:
             output = self.detect_individual(image)
-            detected_boxes.append(output["boxes"])
-            detected_classes.append(self.classes_to_indices(output["labels"]))
+            detected_boxes.append(output["boxes"])  # just boxes
+            detected_classes.append([0 for _ in output["labels"]])  # no classes here
         return (
             detected_boxes,
             None,  # no attention points
             None,  # no point labels
             detected_classes,
         )  # return outputs for all images
-
-    def detect_boxes(self, items):
-        images = [item["image"] for item in items]
-        outputs = self.detect_batch(images)
-        results = []
-        for i in range(len(items)):
-            results.append(
-                {
-                    "boxes": outputs[0][i],
-                    "labels": outputs[3][i],
-                }
-            )
-        return results
 
 
 if __name__ == "__main__":

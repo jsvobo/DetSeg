@@ -6,16 +6,16 @@ import pprint
 from omegaconf import DictConfig, OmegaConf
 
 
-def save_results(result_dict, array_masks, array_boxes, cfg):
+def save_results(result_dict, array_masks, array_boxes, index_array, cfg):
     """
     Save the results of the pipeline to a file
     """
     # compose folder name
     dir_path = cfg.save_path
-    det_name = cfg.detector.name
-    seg_name = cfg.segmentation.name + "_" + cfg.segmentation.model
-    num_data = int(cfg.batchsize * cfg.max_batch)
-    dataset_name = cfg.dataset.name
+    det_name = cfg.detector.class_name
+    seg_name = cfg.segmentation.class_name + "_" + cfg.segmentation.sam_model
+    num_data = int(cfg.batch_size * cfg.max_batch)
+    dataset_name = cfg.dataset.class_name
     split = cfg.dataset.split
     folder_name = f"{det_name}_{seg_name}_{dataset_name}_{split}_{num_data}_{time.strftime('%m_%d')}"
     path = dir_path + folder_name
@@ -31,6 +31,7 @@ def save_results(result_dict, array_masks, array_boxes, cfg):
     # save individual IoU results as arrays
     np.save(os.path.join(path, "iou_boxes.npy"), array_boxes)
     np.save(os.path.join(path, "iou_masks.npy"), array_masks)
+    np.save(os.path.join(path, "index_array.npy"), index_array)
 
     print(f"Results saved to {path}")
 
@@ -52,5 +53,6 @@ def load_results(dir_path, print_conf=False):
 
     array_boxes = np.load(os.path.join(dir_path, "iou_boxes.npy"))
     array_masks = np.load(os.path.join(dir_path, "iou_masks.npy"))
+    index_array = np.load(os.path.join(dir_path, "index_array.npy"))
 
-    return results, config, array_boxes, array_masks
+    return results, config, array_boxes, array_masks, index_array

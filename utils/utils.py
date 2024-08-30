@@ -2,6 +2,34 @@ import numpy as np
 import torch
 
 
+def boxes_to_masks(boxes, mask_shape):
+    """
+    Convert list of boxes in formax x0,y0,x1,y1 to uint8 mask for calculating IoU. need to know the full shape
+    """
+    masks = []
+    for box in boxes:
+        mask = torch.zeros(mask_shape, dtype=torch.uint8)
+        x1, y1, x2, y2 = box
+        mask[y1:y2, x1:x2] = 1
+        masks.append(mask)
+    return masks
+
+
+def get_IoU_boxes(gt_box, det_box):
+    """
+    Compute IoU between 2 bounding boxes
+    """
+    x0, y0, x1, y1 = gt_box
+    x0_, y0_, x1_, y1_ = det_box
+    intersection = max(0, min(x1, x1_) - max(x0, x0_)) * max(
+        0, min(y1, y1_) - max(y0, y0_)
+    )
+    area_gt = (x1 - x0) * (y1 - y0)
+    area_det = (x1_ - x0_) * (y1_ - y0_)
+    union = area_gt + area_det - intersection
+    return 0 if union == 0 else (intersection / union)
+
+
 def get_IoU_masks(gt_mask, mask):
     """
     Compute IoU between 2 masks
