@@ -43,7 +43,7 @@ def get_IoU_masks(gt_mask, mask):
 
 def get_IoU_multiple(masks, gt_masks):
     """
-    Compute IoU between 2 masks
+    Compute IoU between 2 sets of MATCHED masks (1:1)
     """
     assert len(gt_masks) == len(masks)
     return [get_IoU_masks(gt_masks[i], masks[i]) for i in range(len(masks))]
@@ -92,19 +92,3 @@ def crop_xyxy(img, mask, box, crop_box):
     cropped_mask = mask[y0:y1, x0:x1]  # need to also crop the w,h
 
     return cropped_img, cropped_mask, box_coords
-
-
-def convert_tensors_to_save(d):
-    """
-    Recursively convert dictionary with tensors to dictionary with lists at the leaves.
-    This is done for saving purposes, as torch.Tensor cannot be saved to disk
-    """
-    if isinstance(d, dict):
-        # Recursively apply the function for nested dictionaries
-        return {k: convert_tensors_to_save(v) for k, v in d.items()}
-    elif isinstance(d, torch.Tensor):
-        # Convert the torch.Tensor to a numpy array
-        return d.cpu().tolist()
-    else:
-        # Return the value as is if it's neither a dict nor a torch.Tensor
-        return d

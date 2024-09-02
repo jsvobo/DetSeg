@@ -12,6 +12,7 @@ import utils  # contains sam_utils, visual_utils, and other utility functions
 from datasets.dataset_loading import CocoLoader, get_coco_split
 import segmentation_models
 import detection_models
+import matching
 
 
 # TODO: move to utils??
@@ -28,55 +29,37 @@ def filter_images(images, metadata):
     return filtered_images, filtered_metadata
 
 
-def boxes_to_masks(boxes, mask_shape):
+def to_dict_for_map(objects, classes, scores, object_type):
     """
-    Convert list of boxes in formax x0,y0,x1,y1 to uint8 mask for calculating IoU. need to know the full shape
-    """
-    masks = []
-    for box in boxes:
-        mask = torch.zeros(mask_shape, dtype=torch.uint8)
-        x1, y1, x2, y2 = box
-        mask[y1:y2, x1:x2] = 1
-        masks.append(mask)
-    return masks
-
-
-def to_dict_for_map(list_of_list_of_boxes, list_of_list_of_classes):
-    """
-    This function can take boxes or masks and does the same. Only difference is the dict keys
-
     Convert a list of lists of boxes (or masks) for one image into a list of dictionaries.
+    The output format is needed for mAP calculation.
     Args:
-        list_of_list_of_boxes (list): A list of lists containing boxes for one image.
+        objects (list): A list of lists containing boxes or masks for one image.
+        classes and scores correspond in thape to objects, and are optional
+        object_type (str): The type of object to be converted. Either "boxes" or "masks".
     Returns:
-        list: A list of dictionaries, where each dictionary represents a box with the following keys:
+        list: A list of dictionaries, where each dictionary represents a set of boxes/masks with the following keys:
             - "boxes": The list of boxes. (alternatively "masks" is returned)
             - "labels": A tensor of zeros with the same length as the list of boxes.
             - "scores": A tensor of ones with the same length as the list of boxes.
 
     This is needed for the MeanAveragePrecision class from torchmetrics to work right
     """
+    assert object_type in ["boxes", "masks"]
 
-    # sometimes empty boxes come.
-    #  this  would not be a problem,but we need to know if we have masks or boxes?
-    for list_for_image in list_of_list_of_boxes:
-        if len(list_for_image) != 0:
-            last_size = len(list_for_image[0])
-            break  # need to find the first non-empty list, its last size determines box or mask
-        # all empty could happen and in that case we might have a problem, TODO
-
-    key_type = (
-        "boxes" if last_size == 4 else "masks"
-    )  # last dim is 4 -> boxes, else masks
+    if scores is None:  # if no scores, then just ones, not important with GT
+        scores = [None for _ in objects]
+    if classes is None:  # for classless metrics
+        classes = [None for _ in objects]
 
     return [
         {
-            key_type: list_of_boxes,
-            "labels": torch.Tensor(list_of_classes).type(torch.int32),
-            "scores": torch.ones(len(list_of_boxes), dtype=torch.float32),
+            object_type: instance_boxes,
+            "labels": torch.Tensor(instance_classes).type(torch.int32),
+            "scores": instance_scores,  # None if not given
         }
-        for list_of_boxes, list_of_classes in zip(
-            list_of_list_of_boxes, list_of_list_of_classes
+        for instance_objects, instance_classes, instance_scores in zip(
+            objects, classes, scores
         )
     ]
 
@@ -94,22 +77,6 @@ class Evaluator:
         boxes_transform (optional): The transformation function to be applied to detected boxes.
         model_det (optional): The object detection model to be evaluated. If None, GT boxes are used.
         box_matching (callable, optional): The function selecting boxes for segmentation.
-    Attributes:
-        model_det: The object detection model.
-        model_seg: The segmentation model.
-        det_batch_metrics: The batch metrics for object detection.
-        seg_batch_metrics: The batch metrics for segmentation.
-        seg_pairwise_metrics: The pairwise metrics for segmentation.
-        boxes_transform: The transformation function for detected boxes.
-        box_matching: The function to match ground truth boxes with detected boxes.
-        device: The device used for evaluation.
-    Methods:
-        evaluate(data_loader, savepath=None, max_batch=None):
-            Evaluates the models using the given data loader.
-    Usage:
-        evaluator = Evaluator(model_seg, device="cuda", seg_pairwise_metrics, seg_batch_metrics, det_batch_metrics,
-                            boxes_transform, model_det, box_matching)
-        evaluator.evaluate(data_loader, savepath=None, max_batch=None)
     """
 
     def __init__(
@@ -129,14 +96,14 @@ class Evaluator:
         self.boxes_transform = boxes_transform
         self.device = device
 
-        self.IoU_boxes = []
-        self.IoU_masks = []
+        self.iou_boxes, self.iou_masks = [], []
+
         self.evaluated = False
         self.cfg = cfg
 
         # pairwise metrics, wIoU
-        self.seg_IoU_metric = JaccardIndex("binary").to(device)
-        self.det_IoU_metric = JaccardIndex("binary").to(device)
+        self.seg_iou_metric = JaccardIndex("binary").to(device)
+        self.det_iou_metric = JaccardIndex("binary").to(device)
 
         # batch metrics, mAP, but CA/classless
         self.det_map_classless = MeanAveragePrecision(
@@ -158,12 +125,13 @@ class Evaluator:
             iou_type="bbox", average="macro", class_metrics=True, extended_summary=False
         )
 
-        # calculating something at all
+        # calculating something at all, if det=None, then gt is used
         assert (model_seg is not None) or (model_det is not None)
 
-    def matching(self, gt, inferred):
+    def matching(self, gt, det, det_scores, iou_type):
         # TODO implement actual matching.
-        # how do they do it in torchmetrics mAP?
+        # call matching.matching_fn(gt, det, det_scores, threshold=0.5, iou_type=iou_type)
+
         length = len(gt)  # for now just take the same amount of boxes and call it a day
         return inferred[:length]
 
@@ -171,55 +139,79 @@ class Evaluator:
         gt_boxes = [instance["boxes"] for instance in metadata]
         gt_masks = [instance["masks"].type(torch.uint8) for instance in metadata]
         gt_classes = [instance["categories"] for instance in metadata]
-        return gt_boxes, gt_masks, gt_classes
+        return {"boxes": gt_boxes, "masks": gt_masks, "classes": gt_classes}
 
-    def calculate_metrics_detection(
-        self, detected_boxes, detected_classes, gt_boxes, gt_classes, images_shapes
-    ):
+    def calculate_metrics_detection(self, detection_results, gt):
         """
         Calculates segmentation metrics for the given inferred and ground truth boxes.
         Needs image shapes when converting the boxes to masks for jaccard index calculation.
         Args:
-            detected_classes (list): List of inferred classes, as they come from boxes
-            gt_boxes (list): List of lists of ground truth boxes.
-            gt_class (list): List of ground truth classes.
-            detected_boxes (list): List of lists of inferred boxes.
+            detection_results: dict with keys:
+                "boxes": list of lists of boxes,
+                "class_labels" list of lists of classes,
+                "confidence": list of lists of confidence score for each detection
+                "attention_points": list of lists of attention points for each detection
+                "point_labels": for each attention point,
+                        the label means if it is positive or negative prompt
         Returns:
             None
         """
-        # this is a but inefficien, but works for now
-        zeros_as_gt = [[0 for _ in gt_box_list] for gt_box_list in gt_classes]
-        #       to properly register classless metrics, we invent a new dummy GT classes list
-        #       this means everything is in one class
-        dict_detected = to_dict_for_map(detected_boxes, detected_classes)
-        dict_gt = to_dict_for_map(gt_boxes, gt_classes)
-        dict_gt_classless = to_dict_for_map(gt_boxes, zeros_as_gt)
+        detected_boxes = detection_results["boxes"]
+        detected_classes = detection_results["class_labels"]
+        detected_scores = detection_results["confidence"]
+
+        gt_boxes = gt["boxes"]
+        gt_classes = gt["classes"]
+
+        detected_dict = to_dict_for_map(
+            objects=detected_boxes,
+            classes=detected_classes,
+            scores=detected_scores,
+            object_type="boxes",
+        )
+        gt_dict = to_dict_for_map(
+            objects=gt_boxes,
+            classes=gt_classes,
+            scores=None,
+            object_type="boxes",
+        )
+        gt_classless_dict = to_dict_for_map(
+            objects=gt_boxes, classes=None, scores=None, object_type="boxes"
+        )
 
         # M:N metrics
-        self.det_map_classless.update(dict_detected, dict_gt_classless)
-        self.det_batch_classful.update(dict_detected, dict_gt)
+        self.det_map_classless.update(detected_dict, gt_classless_dict)
+        self.det_batch_classful.update(detected_dict, gt_dict)
 
         # 1:1 metrics
-        selected_boxes = self.matching(gt=gt_boxes, inferred=detected_boxes)
-        for gt_box_list, box_list, shape in zip(
-            gt_boxes, selected_boxes, images_shapes
-        ):
-            if len(gt_box_list) == 0:
-                continue
+        matched_detections, match_ious = self.matching(
+            gt=gt_boxes,
+            det=detected_boxes,
+            det_scores=detected_scores,
+            iou_type="boxes",
+        )
+        self.iou_boxes.extend(match_ious)
 
-            # convert boxes to masks using original shape
-            box_list_as_mask = uils.boxes_to_masks(box_list, shape)
-            gt_box_list_as_mask = uils.boxes_to_masks(gt_box_list, shape)
+        # # TODO: dont need this??, just extend self.iou_boxes and save to pandas?
+        # for gt_box_list, box_list, shape in zip(
+        #     gt_boxes, selected_boxes, images_shapes
+        # ):
+        #     if len(gt_box_list) == 0:
+        #         continue
 
-            # pair boxes together
-            for gt, inferred in zip(
-                box_list,
-                gt_box_list,
-            ):
-                IoU = self.det_IoU_metric.forward(
-                    inferred.to(self.device), gt.to(self.device)
-                )
-                self.IoU_boxes.append(IoU.cpu())
+        #     # convert boxes to masks using original shape
+        #     box_list_as_mask = utils.boxes_to_masks(box_list, shape)
+        #     gt_box_list_as_mask = utils.boxes_to_masks(gt_box_list, shape)
+
+        #     # pair boxes together
+        #     for gt, inferred in zip(
+        #         box_list_as_mask,
+        #         gt_box_list_as_mask,
+        #     ):
+        #         iou = self.det_iou_metric.forward(
+        #             inferred.to(self.device), gt.to(self.device)
+        #         )
+        #         self.iou_boxes.append(iou.cpu())
 
     def calculate_metrics_segmentation(
         self,
@@ -238,7 +230,7 @@ class Evaluator:
         Returns:
             None
         """
-        # this is a but inefficien, but works for now (same as in boxes)
+        # this is a bit inefficien, but works for now (same as in boxes)
         zeros_as_gt = [[0 for _ in gt_box_list] for gt_box_list in gt_classes]
         #       to properly register classless metrics, we invent a new dummy GT classes list
         #       this means everything is in one class
@@ -247,7 +239,7 @@ class Evaluator:
 
         dict_detected = to_dict_for_map(inferred_masks, inferred_classes)
         dict_gt = to_dict_for_map(gt_masks, gt_classes)
-        dict_gt_classless = to_dict_for_map(gt_boxes, zeros_as_gt)
+        dict_gt_classless = to_dict_for_map(gt_masks, zeros_as_gt)
 
         # M:N metrics
         self.seg_map_classless.update(dict_detected, dict_gt_classless)
@@ -261,8 +253,8 @@ class Evaluator:
                 gt_masks_list.to(self.device),
                 masks_list.to(self.device),
             ):
-                IoU = self.seg_IoU_metric.forward(inferred, gt)
-                self.IoU_masks.append(IoU.cpu())
+                iou = self.seg_iou_metric.forward(inferred, gt)
+                self.iou_masks.append(iou.cpu())
 
     def get_metrics(self):
         """
@@ -272,10 +264,10 @@ class Evaluator:
         assert self.evaluated
         result_dict = {
             # weighted avg IoUs and equal weight (mean) IoUs
-            "weighted det IoU": float(self.det_IoU_metric.compute().cpu()),
-            "weighted seg IoU": float(self.seg_IoU_metric.compute().cpu()),
-            "mean det IoU": float(np.mean(np.array(self.IoU_boxes))),
-            "mean seg IoU": float(np.mean(np.array(self.IoU_masks))),
+            "weighted det IoU": float(self.det_iou_metric.compute().cpu()),
+            "weighted seg IoU": float(self.seg_iou_metric.compute().cpu()),
+            "mean det IoU": float(np.mean(np.array(self.iou_boxes))),
+            "mean seg IoU": float(np.mean(np.array(self.iou_masks))),
             # mAPs , classless and per class for both seg,det
             "classless mAP - detection": utils.convert_tensors_to_save(
                 self.det_map_classless.compute()
@@ -292,9 +284,9 @@ class Evaluator:
         }
         return (
             result_dict,
-            np.array(self.IoU_masks),
-            np.array(self.IoU_boxes),
-            np.array([]),  # TODO: for now
+            np.array(self.iou_masks),
+            np.array(self.iou_boxes),
+            np.array([]),  # TODO: for now, index array? pd frame?
         )
 
     def evaluate(self, data_loader, savepath=None, max_batch=None):
@@ -307,9 +299,7 @@ class Evaluator:
                 if None, then whole dataset is evaluated.
         Returns:
             None
-            Metrics are stored in the torchmetrics classes
-        Raises:
-            None
+            Metrics are stored in the torchmetrics classes, and can be accessed with get_metrics()
         """
 
         for i, batch in tqdm(enumerate(data_loader)):
@@ -318,27 +308,16 @@ class Evaluator:
             images = list(batch[0])
             metadata = list(batch[1])
 
-            # filter out images with no GT boxes (and masks)
-            images, metadata = filter_images(images, metadata)
-            if len(images) == 0:
-                continue  # no boxes in this batch at all, sad :((
-
             # list of list of mask/boxes and classes as GT
-            gt_boxes, gt_masks, gt_classes = self.prepare_gt(metadata)
+            gt = self.prepare_gt(metadata)
 
             # detection module. attention points and labels possible with detection classes
-            detected_boxes, attention_points, point_labels, detection_classes = (
-                self.model_det.detect_batch(images, metadata)
-            )
+            detection_results = self.model_det.detect_batch(
+                images, metadata
+            )  # need metadata for GT
 
             # detection metrics
-            self.calculate_metrics_detection(
-                detected_boxes=detected_boxes,
-                detected_classes=detection_classes,
-                gt_classes=gt_classes,
-                gt_boxes=gt_boxes,
-                images_shapes=[gt_mask.shape[1:] for gt_mask in gt_masks],
-            )
+            self.calculate_metrics_detection(detection_results=detection_results, gt=gt)
 
             # can do box transforms here
             if self.boxes_transform is not None:
@@ -353,12 +332,12 @@ class Evaluator:
                 # if segmentation, then calculate metrics
                 self.calculate_metrics_segmentation(
                     inferred_masks=inferred_masks,
-                    inferred_classes=detection_classes,
-                    gt_classes=gt_classes,
-                    gt_masks=gt_masks,
+                    inferred_classes=detection_results["classes"],
+                    gt_classes=gt["classes"],
+                    gt_masks=gt["masks"],
                 )
 
-        # I can return the metrics after this
+        # I can return the metrics after this, otherwise error
         self.evaluated = True
 
 

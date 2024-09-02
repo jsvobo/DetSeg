@@ -1,0 +1,25 @@
+name: categories 
+classes:
+  - animal
+  - person
+  - fruit
+  - food
+  - vegetable
+  - vehicle
+  - building
+  - tool
+  - clothing
+  - instrument
+  - furniture
+  - toy
+  - appliance
+  - weapon
+  - plant
+  - body part
+  - accessory
+  - container
+  - machine
+  - electronics
+  - drink
+  - utensil
+  - musical instrument

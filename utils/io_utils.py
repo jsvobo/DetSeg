@@ -56,3 +56,19 @@ def load_results(dir_path, print_conf=False):
     index_array = np.load(os.path.join(dir_path, "index_array.npy"))
 
     return results, config, array_boxes, array_masks, index_array
+
+
+def convert_tensors_to_save(d):
+    """
+    Recursively convert dictionary with tensors to dictionary with lists at the leaves.
+    This is done for saving purposes, as torch.Tensor cannot be saved to disk
+    """
+    if isinstance(d, dict):
+        # Recursively apply the function for nested dictionaries
+        return {k: convert_tensors_to_save(v) for k, v in d.items()}
+    elif isinstance(d, torch.Tensor):
+        # Convert the torch.Tensor to a numpy array
+        return d.cpu().tolist()
+    else:
+        # Return the value as is if it's neither a dict nor a torch.Tensor
+        return d

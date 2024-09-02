@@ -37,7 +37,8 @@ def get_coco_split(split: str = "train", year: str = "2017", root=None):
     assert split in ["train", "val"]
     assert year in ["2014", "2017"]
     if root is None:
-        root = "/mnt/vrg2/imdec/datasets/COCO"  # default root
+        print("No root provided, using default")
+        root = "/mnt/vrg2/imdec/datasets/COCO"  # default root of none is provided
 
     annotation_path = os.path.join(root, "annotations")
     type_ann = "instances"  # instances, captions, person_keypoints
@@ -70,37 +71,41 @@ class CocoLoader(CocoDetection):
     def get_cat_keys(self):  # new categories, without gaps
         return self.new_class_ids
 
-    def translate_to_new_catID(self, catID):  # from old category to its new category
+    def CatID_old_to_new(self, catID):  # from old category to its new category
         return self.old_to_new_cat_translation_table[catID]
 
-    def translate_to_old_catID(self, catID):  # from new category to its old category
+    def CatID_new_to_old(self, catID):  # from new category to its old category
         return self.new_to_old_cat_translation_table[catID]
 
     def get_api(self):
         return self.coco
 
     def decode_ann(self, ann):
+        """
+        decodes mask from coco annotation, uses pycocotools api class
+        """
         return self.coco.annToMask(ann)
 
     def get_amount(self, amount, offset=0):
+        """
+        Returns a list of amount items from the dataset, starting from offset
+        Example: In notebook, I want to explore 10 images from the dataset,
+             this fn loads them all at once
+        """
         assert offset >= 0
         assert amount > 0
         return [self[offset + i] for i in range(amount)]
 
     def __getitem__(self, index):
-        item = super(CocoLoader, self).__getitem__(index)
-        img = item[0]
-        annotations = item[1]
+        img, annotations = super(CocoLoader, self).__getitem__(index)
 
-        boxes = []
-        masks = []
-        cats = []
+        boxes, masks, cats = [], [], []
         for ann in annotations:
             box = box_coco_to_sam(ann["bbox"])
             boxes.append(box)
             mask = self.decode_ann(ann)
             masks.append(np.uint8(mask))
-            cats.append(self.translate_to_new_catID(ann["category_id"]))
+            cats.append(self.CatID_old_to_new(ann["category_id"]))
             # to normalize categories. base cats have a lot of gaps
 
         boxes = np.array(boxes)
@@ -119,14 +124,14 @@ class CocoLoader(CocoDetection):
             ),
         }
 
-    def translate_catIDs(self, catIDs):
+    def catIDs_to_names(self, catIDs):
         return [
-            self.coco.cats[self.translate_to_old_catID(int(catID))]["name"]
+            self.coco.cats[self.CatID_new_to_old(int(catID))]["name"]
             for catID in catIDs
             # again need to map to original catIDs and return the names
         ]
 
-    def instantiate_loader(self, batch_size=4, num_workers=4):
+    def create_dataloader(self, batch_size=4, num_workers=4):
 
         def collate_fn(batch):
             images = [item["image"] for item in batch]
@@ -136,13 +141,14 @@ class CocoLoader(CocoDetection):
         data_loader = DataLoader(
             self,
             batch_size=batch_size,
-            shuffle=False,  # dont mix pls. we then save the positions
+            shuffle=False,  # dont mix pls. we then save the positions TODO: return indices?
             num_workers=num_workers,
             collate_fn=collate_fn,
         )
         return data_loader
 
     def get_classes(self):
+        # return all category names
         return [self.coco.cats[int(catID)]["name"] for catID in self.coco.cats.keys()]
 
 
@@ -157,7 +163,7 @@ def test_coco_loading():
     assert item["image"].shape[2] == 3
     assert len(coco.get_amount(10)) == 10
 
-    print(coco.translate_catIDs([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
+    print(coco.catIDs_to_names([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
     print(coco.get_classes())
     print(coco.get_cat_keys())
     print("Coco loading test passed!")

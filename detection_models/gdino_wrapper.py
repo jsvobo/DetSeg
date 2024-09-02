@@ -37,7 +37,8 @@ class GroundingDinoTiny(GrDINO):
         if (
             cfg is None
         ):  # if not in a pipeline, but in a notebook, load a "manual" config from a specific loaction
-            cfg = OmegaConf.load("./config/detector/gdino_manual.yaml")
+            print("No config provided to grounding dino, loading default")
+            cfg = OmegaConf.load("./config/detector/gdino_ntbk.yaml")
         self.box_threshold = cfg["box_threshold"]
         self.text_threshold = cfg["text_threshold"]
 
@@ -80,18 +81,18 @@ class GroundingDinoTiny(GrDINO):
         return format same is the pipeline needs to work
         detected boxes,attention points for each box, labels of those points, class detected for each box
         """
-        detected_boxes = []
-        detected_classes = []
+        boxes, classes, scores = [], [], []
         for image in images:
             output = self.detect_individual(image)
-            detected_boxes.append(output["boxes"])  # just boxes
-            detected_classes.append([0 for _ in output["labels"]])  # no classes here
-        return (
-            detected_boxes,
-            None,  # no attention points
-            None,  # no point labels
-            detected_classes,
-        )  # return outputs for all images
+            boxes.append(output["boxes"])  # just boxes
+            classes.append([0 for _ in output["labels"]])  # no classes here
+        return {
+            "boxes": boxes,
+            "class_labels": classes,
+            "confidence": scores,
+            "attention_points": None,  # no attention points
+            "point_labels": None,  # no point labels
+        }  # return outputs for all images
 
 
 if __name__ == "__main__":
@@ -105,4 +106,4 @@ if __name__ == "__main__":
 
     batch = [item["image"] for item in coco_train_dataset.get_amount(5)]
     outputs = gd.detect_batch(batch)
-    print(outputs)
+    print(outputs["class_labels"])
