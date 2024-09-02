@@ -86,6 +86,7 @@ class GroundingDinoTiny(GrDINO):
             output = self.detect_individual(image)
             boxes.append(output["boxes"])  # just boxes
             classes.append([0 for _ in output["labels"]])  # no classes here
+            scores.append(output["scores"])  # confidence scores
         return {
             "boxes": boxes,
             "class_labels": classes,

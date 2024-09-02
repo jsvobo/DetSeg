@@ -4,6 +4,7 @@ import os
 import time
 import pprint
 from omegaconf import DictConfig, OmegaConf
+import torch
 
 
 def save_results(result_dict, array_masks, array_boxes, index_array, cfg):

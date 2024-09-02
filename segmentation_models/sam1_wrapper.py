@@ -70,16 +70,12 @@ class SamWrapper(BaseSegmentWrapper):
             results_whole.append(results)
         return results_whole
 
-    def infer_batch(
-        self,
-        images,
-        boxes=None,
-        point_coords=None,
-        point_labels=None,
-    ):
-        sam_batched_inputs = []
-        resulting_masks = []
-        index_list = []
+    def infer_batch(self, images, detection_results):
+        boxes = detection_results["boxes"]
+        point_coords = detection_results["attention_points"]
+        point_labels = detection_results["point_labels"]
+
+        sam_batched_inputs, resulting_masks, index_list = [], [], []
 
         # prepare sam_batched_inputs based on prompts
         for image_idx in range(len(images)):
@@ -129,7 +125,7 @@ class SamWrapper(BaseSegmentWrapper):
             batched_output, resulting_masks, index_list
         )
 
-        return results
+        return results  # masks, confidence (predicted IoU, not score)
 
 
 class AutomaticSam(SamAutomaticMaskGenerator):

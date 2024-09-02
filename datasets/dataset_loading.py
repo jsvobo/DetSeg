@@ -80,9 +80,9 @@ class CocoLoader(CocoDetection):
     def get_api(self):
         return self.coco
 
-    def decode_ann(self, ann):
+    def coco_ann_to_binary_mask(self, ann):
         """
-        decodes mask from coco annotation, uses pycocotools api class
+        decodes mask from coco annotation, uses pycocotools api class to do this
         """
         return self.coco.annToMask(ann)
 
@@ -103,7 +103,7 @@ class CocoLoader(CocoDetection):
         for ann in annotations:
             box = box_coco_to_sam(ann["bbox"])
             boxes.append(box)
-            mask = self.decode_ann(ann)
+            mask = self.coco_ann_to_binary_mask(ann)
             masks.append(np.uint8(mask))
             cats.append(self.CatID_old_to_new(ann["category_id"]))
             # to normalize categories. base cats have a lot of gaps
@@ -116,7 +116,7 @@ class CocoLoader(CocoDetection):
             "annotations": (
                 {
                     "boxes": torch.Tensor(boxes).type(
-                        torch.int16
+                        torch.int32
                     ),  # cant be uint8!! weird error with conversion
                     "masks": torch.Tensor(masks).type(torch.uint8),
                     "categories": torch.Tensor(cats),

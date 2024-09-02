@@ -2,31 +2,34 @@ import numpy as np
 import torch
 
 
-def boxes_to_masks(boxes, mask_shape):
-    """
-    Convert list of boxes in formax x0,y0,x1,y1 to uint8 mask for calculating IoU. need to know the full shape
-    """
-    masks = []
-    for box in boxes:
-        mask = torch.zeros(mask_shape, dtype=torch.uint8)
-        x1, y1, x2, y2 = box
-        mask[y1:y2, x1:x2] = 1
-        masks.append(mask)
-    return masks
+def area(box):
+    x0, y0, x1, y1 = box
+    return (x1 - x0) * (y1 - y0)
 
 
-def get_IoU_boxes(gt_box, det_box):
+def get_IoU_boxes(box1, box2):
     """
     Compute IoU between 2 bounding boxes
     """
-    x0, y0, x1, y1 = gt_box
-    x0_, y0_, x1_, y1_ = det_box
-    intersection = max(0, min(x1, x1_) - max(x0, x0_)) * max(
-        0, min(y1, y1_) - max(y0, y0_)
-    )
-    area_gt = (x1 - x0) * (y1 - y0)
-    area_det = (x1_ - x0_) * (y1_ - y0_)
-    union = area_gt + area_det - intersection
+    x0, y0, x1, y1 = box1
+    x0_, y0_, x1_, y1_ = box2
+
+    if x0_ > x1 or y0_ > y1 or x1_ < x0 or y1_ < y0:
+        # out completely, no intersection
+        return 0
+
+    max_left_x = max(x0, x0_)
+    max_upper_y = max(y0, y0_)
+    min_right_x = min(x1, x1_)
+    min_lower_y = min(y1, y1_)
+
+    area1 = int(area(box1))
+    area2 = int(area(box2))
+
+    intersection_box = [max_left_x, max_upper_y, min_right_x, min_lower_y]
+    intersection = area(intersection_box)
+    union = area1 + area2 - intersection
+
     return 0 if union == 0 else (intersection / union)
 
 
@@ -37,13 +40,13 @@ def get_IoU_masks(gt_mask, mask):
 
     intersection = torch.sum(torch.logical_and(gt_mask, mask))
     union = torch.sum(torch.logical_or(gt_mask, mask))
-
     return 0 if union == 0 else (intersection / union)
 
 
 def get_IoU_multiple(masks, gt_masks):
     """
-    Compute IoU between 2 sets of MATCHED masks (1:1)
+    Compute IoU between 2 sets of MATCHED masks (1:1),
+        otherwise the result is bad. no matching here
     """
     assert len(gt_masks) == len(masks)
     return [get_IoU_masks(gt_masks[i], masks[i]) for i in range(len(masks))]

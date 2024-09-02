@@ -15,10 +15,11 @@ max_batch: 10 # None or integer
 save_results: False
 print_results: True
 save_path: ./out/pipeline_results/
-evaluator: #empty for now. can add, will go into evaluator
+evaluator: 
+    #empty for now. can add, what you put here goes into evaluator class
 
 
-#disable saving results and logging
+#disable saving results and logging 
 hydra:  
   output_subdir: null  
   run:  
