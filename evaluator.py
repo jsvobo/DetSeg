@@ -237,7 +237,7 @@ class Evaluator:
         """
 
         for batch_idx, batch in tqdm(enumerate(data_loader)):
-            if (max_batch is not None) and (batch_idx > max_batch):
+            if (max_batch is not None) and (batch_idx >= max_batch):
                 break
             images = list(batch[0])
             metadata = list(batch[1])

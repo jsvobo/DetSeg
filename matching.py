@@ -54,6 +54,7 @@ def matching_fn(gt_full_array, det, det_scores, threshold=0.5, iou_type="boxes")
 
         if len(gt_list) <= 0:  # all GT matched :))
             break
+
         # calculate IoU against all GT boxes in the list
         if iou_type == "boxes":
             ious = iou_against_one_box(one=detected_object, multiple_boxes=gt_list)
@@ -72,7 +73,8 @@ def matching_fn(gt_full_array, det, det_scores, threshold=0.5, iou_type="boxes")
 
         # save which det box is matched with this GT, save IoU
         if iou_type == "boxes":
-            index_of_gt = np.where(gt_full_array == gt_best)[0][0]
+            matches = np.all(gt_full_array == np.array(gt_best), axis=(1))
+            index_of_gt = np.where(matches)[0][0]
         elif iou_type == "masks":
             matches = np.all(gt_full_array == np.array(gt_best), axis=(1, 2))
             index_of_gt = np.where(matches)[0][0]
