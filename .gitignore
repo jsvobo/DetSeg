@@ -2,5 +2,7 @@ datasets/COCO
 __pycache__
 PROB
 mvits_for_class_agnostic_od
-example_imgs
 out/
+outputs/
+.vscode
+

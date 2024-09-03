@@ -1,0 +1,4 @@
+class_name: GroundingDinoTiny
+text_threshold: 0.1
+box_threshold: 0.1
+

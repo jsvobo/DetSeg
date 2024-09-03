@@ -1,44 +1,22 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import torch
+import numpy as np
+import utils
 from matplotlib import colormaps
 from matplotlib.colors import ListedColormap
 import matplotlib.patches as mpatches
-from PIL import Image
-
-# color list, patches and colormap definitions for mask visualisation (sam.ipynb)
-colors_together = ["blue", "red", "yellow", "green"]
-patches_together = [
-    mpatches.Patch(color=colors_together[i]) for i in range(len(colors_together))
-]
-cmap_together = ListedColormap(colors_together)
-
-colors_separate = ["blue", "red"]
-patches_separate = [
-    mpatches.Patch(color=colors_separate[i]) for i in range(len(colors_separate))
-]
-cmap_single = ListedColormap(colors_separate)
 
 
-# functions for plotting masks, bboxes, images and alike
-def show_mask(mask, ax, random_color=False):
-    """
-    Interpreted from https://github.com/facebookresearch/segment-anything
-    """
-    if random_color:
-        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-    else:
-        color = np.array([30 / 255, 144 / 255, 255 / 255, 0.6])
-    h, w = mask.shape[-2:]
-    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-    ax.imshow(mask_image)
+global_titlesize = 15  # dont touch? not important
 
 
 def show_points(coords, labels, ax, marker_size=300):
     """
     Interpreted from https://github.com/facebookresearch/segment-anything
     """
-    pos_points = coords[labels == 1]
-    neg_points = coords[labels == 0]
+    pos_points = coords[np.where(labels == 1)]
+    neg_points = coords[np.where(labels == 0)]
+
     ax.scatter(
         pos_points[:, 0],
         pos_points[:, 1],
@@ -48,6 +26,7 @@ def show_points(coords, labels, ax, marker_size=300):
         edgecolor="white",
         linewidth=1.25,
     )
+
     ax.scatter(
         neg_points[:, 0],
         neg_points[:, 1],
@@ -72,131 +51,158 @@ def plot_box(box, ax, color="red", linewidth=2):
     )
 
 
-def print_masks_boxes(masks, boxes, img):
-    """
-    bounding boxes in format x0,y0,x1,y1 (main diagonal points)
-    rints all masks and boxes on the image
-    """
-    scale = 8
-    opacity = 0.8
-    box_width = 3
-    BG_MASK = False
-
-    assert len(masks) == len(boxes)
-
-    plt.figure(figsize=(scale, scale))
-    plt.imshow(img)  # first image
-    plt.axis("off")
-
-    cmap = colormaps["viridis"]
-    alpha = np.ones_like(img)[:, :, 0] * opacity
-
-    mask_sum = np.zeros_like(img)[:, :, 0]
-    for i, mask in enumerate(masks):
-        mask_sum = np.maximum(mask_sum, mask * (i + 1))  # layer masks
-    if not BG_MASK:
-        alpha[np.where(mask_sum == 0)] = 0
+def grid_masks_boxes(
+    image,
+    masks=None,
+    boxes=None,
+    titles=None,
+    scale=8,
+    linewidth=3,
+    points=None,
+    point_labels=None,
+):
+    assert (masks is not None) or (boxes is not None)
+    if masks is not None:
+        num_imgs = len(masks) + 1
     else:
-        alpha[np.where(mask_sum == 0)] = opacity / 2
-    plt.imshow(
-        mask_sum, cmap=cmap, alpha=alpha
-    )  # TODO:  show just the masked part with color and not the rest?
+        num_imgs = len(boxes) + 1
 
-    num_boxes = len(boxes)
-    for i, box in enumerate(boxes):  # all masks
-        plot_box(box, plt.gca(), linewidth=box_width)  # color=cmap(i/num_boxes),
-    plt.show()
+    fig, axes = plt.subplots(1, num_imgs, figsize=(num_imgs * scale, scale))
+    axes = axes.flatten()
 
+    for i, ax in enumerate(axes):
+        if i == 0:  # straight up image
+            ax.imshow(image)
+            ax.axis("off")
+            if titles is not None:
+                ax.set_title("Base image", fontsize=global_titlesize)
+            continue
 
-def print_masks(masks, img):
-    scale = 8
-    opacity = 0.8
-    box_width = 3
-    BG_MASK = False
+        index = i - 1
+        ax.axis("off")
+        ax.imshow(image)
+        if titles is not None:
+            ax.set_title(titles[index], fontsize=global_titlesize)
 
-    plt.figure(figsize=(scale, scale))
-    plt.imshow(img)  # first image
-    plt.axis("off")
+        if points is not None:
+            assert len(points) == len(point_labels)
+            if points[index] is not None:
+                utils.show_points(
+                    coords=points[index], labels=point_labels[index], ax=ax
+                )
 
-    cmap = colormaps["viridis"]
-    alpha = np.ones_like(img)[:, :, 0] * opacity
-
-    mask_sum = np.zeros_like(img)[:, :, 0]
-    for i, mask in enumerate(masks):
-        mask_sum = np.maximum(mask_sum, mask * (i + 1))  # layer masks
-    if not BG_MASK:
-        alpha[np.where(mask_sum == 0)] = 0
-    else:
-        alpha[np.where(mask_sum == 0)] = opacity / 2
-    plt.imshow(
-        mask_sum, cmap=cmap, alpha=alpha
-    )  # TODO:  show just the masked part with color and not the rest?
+        if boxes is not None:
+            utils.plot_box(boxes[index], ax, linewidth=linewidth)
+        if masks is not None:
+            ax.imshow(1 * masks[index], cmap="jet", alpha=0.5)
+        # plot this last so the bbox is on top of the mask and not in the edges
 
     plt.show()
 
 
-# image crops, does not show anything, just returns crops
-def crop_xywh(img, mask, box, x0, y0, w, h):
+def print_masks_boxes(
+    image,
+    masks=None,
+    boxes=None,
+    linewidth=3,
+    scale=8,
+    opacity=0.8,
+    mask_background=False,
+    colormap_name="viridis",
+):
     """
-    Input:
-        PIL image, OR ndarray image,
-        np.array mask,
-        box in format x0,y0,x1,y1,
-        x0,y0 is the left upper corner of the crop
-        w,h are the cropped window sizes
-
-    Description:
-    Crop the image mask and bounding box, starting at coords x0,y0 at the left upper corner
-    w,h sets the size of the resulting window
+    Bounding boxes in format x0,y0,x1,y1 (main diagonal points)
+    prints all masks and boxes on the image
+    if None is provided, no boxes are printed, same for masks
     """
-    x0, y0, w, h = np.int32(x0), np.int32(y0), np.int32(w), np.int32(h)  # to int
+    plt.figure(figsize=(scale, scale))
+    plt.imshow(image)  # first image
+    plt.axis("off")
 
-    if img.__class__.__name__ == "Image":  # PIL image
-        cropped_img = img.crop((x0, y0, x0 + w, y0 + h))
-    elif img.__class__.__name__ == "ndarray":  # numpy array
-        cropped_img = img[y0 : y0 + h, x0 : x0 + w]
-    else:
-        raise ValueError("Unknown image type")
+    has_masks = (masks is not None) and (len(masks) > 0)
+    has_boxes = (boxes is not None) and (len(boxes) > 0)
 
-    box_coords = [
-        box[0] - x0,
-        box[1] - y0,
-        box[2] - x0,
-        box[3] - y0,
-    ]  # subtract corner from the box
-    cropped_mask = mask[y0 : y0 + h, x0 : x0 + w]  # need to also crop the w,h
+    if has_masks and has_boxes:  # I have both
+        assert len(masks) == len(boxes)
 
-    return cropped_img, cropped_mask, box_coords
+    if has_masks:
+        cmap = colormaps[colormap_name]
+        alpha = np.ones_like(image)[:, :, 0] * opacity
+        mask_sum = np.zeros_like(image)[:, :, 0]
+
+        for i, mask in enumerate(masks):
+            mask_sum = np.maximum(mask_sum, mask * (i + 1))  # layer masks
+        if not mask_background:
+            alpha[np.where(mask_sum == 0)] = 0
+        else:
+            alpha[np.where(mask_sum == 0)] = opacity / 2
+        plt.imshow(mask_sum, cmap=cmap, alpha=alpha)
+
+    if has_boxes:
+        num_boxes = len(boxes)
+        for i, box in enumerate(boxes):  # all masks
+            utils.plot_box(box, plt.gca(), linewidth=linewidth)
+
+    plt.show()
 
 
-def crop_xyxy(img, mask, box, x0, y0, x1, y1):
-    """
-    Input:
-        PIL image, OR ndarray image,
-        np.array mask,
-        box in format x0,y0,x1,y1,
-        x0,y0 is the left upper corner of the crop
-        x1,y1 is the left upper corner of the crop
+# color list, patches and colormap definitions for mask visualisation, function show_differences()
+colors1 = ["blue", "red"]
+patches1 = [mpatches.Patch(color=c) for c in colors1]
+cmap1 = ListedColormap(colors1)
+labels1 = ["Background", "Mask"]
 
-    Description:
-    Crop the image mask and bounding box, starting at coords x0,y0 at the left upper corner
-    w,h sets the size of the resulting window
-    """
-    x0, y0, x1, y1 = np.int32(x0), np.int32(y0), np.int32(x1), np.int32(y1)  # to int
+colors2 = ["blue", "red", "yellow", "green"]
+patches2 = [mpatches.Patch(color=c) for c in colors2]
+cmap2 = ListedColormap(colors2)
+labels2 = ["Background", "Only inferred", "Only GT", "Intersection"]
 
-    if img.__class__.__name__ == "Image":  # PIL image
-        cropped_img = img.crop((x0, y0, x1, y1))
-    elif img.__class__.__name__ == "ndarray":  # numpy array
-        cropped_img = img[y0:y1, x0:x1]
-    else:
-        raise ValueError("Unknown image type")
 
-    box_coords = [
-        box[0] - x0,
-        box[1] - y0,
-        box[2] - x0,
-        box[3] - y0,
-    ]  # subtract corner from the box
-    cropped_mask = mask[y0:y1, x0:x1]  # need to also crop the w,h
+def show_differences(
+    dict_bad_mask,
+    scale=8,
+    linewidth=2,
+    gt_class=None,
+    title_size=22,
+    opacity=0.5,
+    segmentation_model="SAM-1",
+):
+    # load from dict
+    image = dict_bad_mask["image"]
+    box = dict_bad_mask["box"]
+    inferred_mask = dict_bad_mask["inferred_mask"]
+    gt_mask = dict_bad_mask["gt_mask"]
 
-    return cropped_img, cropped_mask, box_coords
+    # listing for every picture, first is just the image
+    cmaps = [cmap1, cmap1, cmap2]
+    patches = [patches1, patches1, patches2]
+    labels = [labels1, labels1, labels2]
+    ncols = [1, 1, 2]
+    titles = ["GT", segmentation_model, "Overlapping masks"]
+
+    if gt_class is not None:
+        # change titles to include the gt class names
+        titles[0] = "GT: " + gt_class
+
+    # Base image
+    fig, axes = plt.subplots(1, 4, figsize=(4 * scale, scale))
+    ax = axes[0]
+    utils.plot_box(box, ax, color="red", linewidth=linewidth)
+    ax.imshow(image)
+    ax.axis("off")
+    ax.set_title("Base image", fontsize=title_size)
+
+    # Image with masks (GT,Inferred, Overlapping)
+    both_masks = np.int64(inferred_mask) + 2 * np.int64(gt_mask)  # adds layers
+    masks_to_show = [gt_mask, inferred_mask, both_masks]
+    for i in range(3):
+        ax = axes[i + 1]
+        ax.imshow(image)
+        ax.axis("off")
+        ax.set_title(titles[i], fontsize=title_size)
+        utils.plot_box(box, ax)
+        ax.imshow(masks_to_show[i], cmap=cmaps[i], alpha=opacity)
+        ax.legend(patches[i], labels[i], ncols=ncols[i], fontsize="x-large")
+
+    fig.tight_layout(rect=[0, 0, 0.95, 0.95])
+    plt.show()

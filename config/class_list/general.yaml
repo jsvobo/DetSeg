@@ -1,0 +1,11 @@
+name: general 
+classes:
+  - item
+  - object
+  - hidden object
+  - entity
+  - thing
+  - stuff
+  - small object
+  - large object
+  - structure

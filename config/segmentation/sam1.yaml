@@ -1,0 +1,7 @@
+
+sam_model: b # b or h for sam1
+
+# dont change. 
+# this path leads to specification of chekpoints for different sizes
+sam_path_config: ./config/segmentation/other/sam1_paths.yaml 
+class_name: SamWrapper #for loading appropriate class in pipeline
