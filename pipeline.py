@@ -127,18 +127,15 @@ class Pipeline:
 
         # run the evaluation and collect results
         evaluator.evaluate(data_loader, max_batch=cfg.max_batch)
-        result_dict, array_masks, array_boxes, index_array = evaluator.get_metrics()
+        results = evaluator.get_metrics()
 
         if print_results:
-            self.print_results(result_dict)
+            self.print_results(results["metrics"])
 
         # save result dictionary and metadata to a file.
         if save_results:
             utils.save_results(
-                result_dict=result_dict,
-                array_masks=array_masks,  # array of IoU for masks and boxes
-                array_boxes=array_boxes,
-                index_array=index_array,
+                results=results,
                 cfg=cfg,
             )
 

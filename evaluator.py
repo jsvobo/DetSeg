@@ -93,8 +93,25 @@ class Evaluator:
         self.boxes_transform = boxes_transform
         self.device = device
         self.cfg = cfg
+        self.image_counter = 0
 
-        self.iou_boxes, self.iou_masks = [], []
+        # dicts for saving detection and segmentation metadata
+        self.boxes_dict = {
+            "image_id": [],
+            "box_id": [],
+            "gt": [],
+            "match": [],
+            "iou": [],
+            "gt_class": [],
+        }
+        self.masks_dict = {
+            "image_id": [],
+            "mask_id": [],
+            "gt": [],
+            "match": [],
+            "iou": [],
+            "gt_class": [],
+        }
         self.evaluated = False
 
         # batch metrics, mAP, but CA/classless
@@ -125,16 +142,58 @@ class Evaluator:
         returns matched objects and IoUs of the matched pairs
         threshold is hardcoded to 0.5 to filter bad matches
         """
-        # additional code can be wrapped here?
-        # mainly need to call matching fn
         return matching.matching_fn(
             gt, det, det_scores, threshold=0.5, iou_type=iou_type
         )
 
+    def store_gt(self, boxes, masks, classes, image_id):
+        # add to dicts for saving later. gt masks/boxes and classes
+        boxes = boxes.numpy()
+        masks = masks.numpy()
+        classes = classes.numpy()
+
+        self.boxes_dict["gt"].extend(boxes)
+        self.masks_dict["gt"].extend(masks)
+        self.boxes_dict["gt_class"].extend(classes)
+        self.masks_dict["gt_class"].extend(classes)
+
+        # id of mask/box in the individual image, same len 0,1,2,3,...
+        range_gt = np.arange(len(boxes)).tolist()
+        self.boxes_dict["box_id"].extend(range_gt)
+        self.masks_dict["mask_id"].extend(range_gt)
+
+        # all these have the same image number 10,10,10,...
+        img_idx_arr = np.ones(len(boxes), dtype=np.int32) * image_id
+        self.boxes_dict["image_id"].extend(img_idx_arr)
+        self.masks_dict["image_id"].extend(img_idx_arr)
+
+    def store_matches(self, matches, ious, object_type):
+        "one set of matches at a time"
+        if object_type == "boxes":
+            self.boxes_dict["iou"].extend(ious)
+            self.boxes_dict["match"].extend(matches)
+        elif object_type == "masks":
+            self.masks_dict["iou"].extend(ious)
+            self.masks_dict["match"].extend(matches)
+
     def prepare_gt(self, metadata):
-        gt_boxes = [instance["boxes"] for instance in metadata]
-        gt_masks = [instance["masks"].type(torch.uint8) for instance in metadata]
-        gt_classes = [instance["categories"] for instance in metadata]
+        # processes metadata of an image to access gt boxes, masks and classes,
+        gt_boxes, gt_masks, gt_classes = [], [], []
+        for idx_in_batch, instance in enumerate(metadata):
+            # extract from metadata
+            boxes = instance["boxes"]
+            masks = instance["masks"]
+            classes = instance["categories"]
+
+            # add to dicts for saving. gt masks/boxes and classes
+            self.store_gt(boxes, masks, classes, self.image_counter)
+            self.image_counter += 1  # added one images gts to dicts
+
+            # add to lists to return to eval for batch
+            gt_boxes.append(boxes)
+            gt_classes.append(classes)
+            gt_masks.append(masks)
+
         return {"boxes": gt_boxes, "masks": gt_masks, "classes": gt_classes}
 
     def update_metrics(self, results, gt, object_type="boxes"):
@@ -187,10 +246,7 @@ class Evaluator:
                 det_scores=detected_scores[batch_idx].cpu(),  # tensor
                 iou_type=object_type,
             )
-            if object_type == "boxes":
-                self.iou_boxes.extend(match_ious)
-            elif object_type == "masks":
-                self.iou_masks.extend(match_ious)
+            self.store_matches(matched_detections, match_ious, object_type)
 
     def get_metrics(self):
         """
@@ -198,10 +254,18 @@ class Evaluator:
         returns result dict, box and mask IoU arrays
         """
         assert self.evaluated, "You must first evaluate on a dataset"
+
+        # finally create dataframes from the dicts, filled with []
+        self.masks_dict = pd.DataFrame(self.masks_dict)
+        self.boxes_dict = pd.DataFrame(self.boxes_dict)
+
+        det_iou = np.mean(np.array(self.boxes_dict["iou"]))
+        seg_iou = np.mean(np.array(self.masks_dict["iou"]))
+
         result_dict = {
-            # Average IoU
-            "mean det IoU": float(np.mean(np.array(self.iou_boxes))),
-            "mean seg IoU": float(np.mean(np.array(self.iou_masks))),
+            # Average IoUs for boxes and masks
+            "mean det IoU": float(det_iou),
+            "mean seg IoU": float(seg_iou),
             # mAPs , classless and per class for both seg,det
             "classless mAP - detection": utils.convert_tensors_to_save(
                 self.det_map_classless.compute()
@@ -216,12 +280,12 @@ class Evaluator:
                 self.seg_batch_classful.compute()
             ),
         }
-        return (
-            result_dict,
-            np.array(self.iou_masks),
-            np.array(self.iou_boxes),
-            np.array([]),  # TODO: for now, index array? pd frame?
-        )
+
+        return {
+            "metrics": result_dict,
+            "masks_df": self.masks_dict,
+            "boxes_df": self.boxes_dict,
+        }
 
     def evaluate(self, data_loader, savepath=None, max_batch=None):
         """

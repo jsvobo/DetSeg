@@ -5,34 +5,39 @@ import time
 import pprint
 from omegaconf import DictConfig, OmegaConf
 import torch
+import pandas as pd
 
 
-def save_results(result_dict, array_masks, array_boxes, index_array, cfg):
+def save_results(results, cfg):
     """
     Save the results of the pipeline to a file
     """
+    metrics = results["metrics"]
+    boxes_df = results["boxes_df"]
+    masks_df = results["masks_df"]
+
     # compose folder name
     dir_path = cfg.save_path
     det_name = cfg.detector.class_name
     seg_name = cfg.segmentation.class_name + "_" + cfg.segmentation.sam_model
     num_data = int(cfg.batch_size * cfg.max_batch)
-    dataset_name = cfg.dataset.class_name
+    prompts = cfg.class_list.name
     split = cfg.dataset.split
-    folder_name = f"{det_name}_{seg_name}_{dataset_name}_{split}_{num_data}_{time.strftime('%m_%d')}"
+    dataset_name = cfg.dataset.name
+    folder_name = f"{det_name}_{seg_name}_{prompts}_{dataset_name}_{split}_{num_data}_{time.strftime('%m_%d')}"
     path = dir_path + folder_name
 
     # save result dicts and config dict
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "results.json"), "w") as f:
-        json.dump(result_dict, f, indent=4)
+        json.dump(metrics, f, indent=4)
 
     with open(os.path.join(path, "config.json"), "w") as f:
         json.dump(OmegaConf.to_container(cfg), f, indent=4)
 
-    # save individual IoU results as arrays
-    np.save(os.path.join(path, "iou_boxes.npy"), array_boxes)
-    np.save(os.path.join(path, "iou_masks.npy"), array_masks)
-    np.save(os.path.join(path, "index_array.npy"), index_array)
+    # save individual IoU results as pickle
+    boxes_df_pickle = boxes_df.to_pickle(os.path.join(path, "boxes_df.pkl"))
+    masks_df_pickle = masks_df.to_pickle(os.path.join(path, "masks_df.pkl"))
 
     print(f"Results saved to {path}")
 
@@ -52,11 +57,11 @@ def load_results(dir_path, print_conf=False):
         if print_conf:
             pprint.pprint(config)
 
-    array_boxes = np.load(os.path.join(dir_path, "iou_boxes.npy"))
-    array_masks = np.load(os.path.join(dir_path, "iou_masks.npy"))
-    index_array = np.load(os.path.join(dir_path, "index_array.npy"))
+    # load individual IoU results from pickle
+    array_boxes = pd.read_pickle(os.path.join(dir_path, "boxes_df.pkl"))
+    array_masks = pd.read_pickle(os.path.join(dir_path, "masks_df.pkl"))
 
-    return results, config, array_boxes, array_masks, index_array
+    return results, config, array_boxes, array_masks
 
 
 def convert_tensors_to_save(d):

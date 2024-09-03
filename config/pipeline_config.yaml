@@ -2,7 +2,7 @@ defaults:
   - dataset: coco # No alternative currently 
   - detector: gdino_tiny  # gdino_tiny , gt_middle, gt 
   - segmentation: sam1 # sam2 in the future
-  - class_list : dataset_defaults # categories, general, dataset_defaults
+  - class_list : categories # categories, general, dataset_defaults
 
   - _self_
   - override hydra/hydra_logging: disabled  
@@ -10,9 +10,9 @@ defaults:
   
   
  
-batch_size: 5 # h4, b6 on RTX4000, b8,h6 on A100
-max_batch: 10 # None or integer
-save_results: False
+batch_size: 2 # h4, b6 on RTX4000, b8,h6 on A100
+max_batch: 2 # None or integer
+save_results: True
 print_results: True
 save_path: ./out/pipeline_results/
 evaluator: 

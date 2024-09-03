@@ -120,7 +120,7 @@ def test_matching_fn():
         [10, 10, 50, 50],
         [60, 65, 100, 100],
         [0, 0, 1000, 1000],  # 2 really bad ones, one with high score
-        [0, 0, 500, 500],
+        [0, 0, 50, 500],
     ]
     dt_scores = [0.2, 0.8, 0.1, 0.9, 0.0]
 

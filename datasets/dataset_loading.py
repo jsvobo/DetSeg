@@ -7,8 +7,6 @@ from torchvision.transforms.functional import pil_to_tensor
 import pycocotools
 from torch.utils.data import DataLoader
 
-import utils  # otherwise does not work from main repo
-
 
 def box_coco_to_sam(coco_box):
     """
@@ -114,12 +112,10 @@ class CocoLoader(CocoDetection):
         return {
             "image": np.asarray(img),
             "annotations": (
-                {
-                    "boxes": torch.Tensor(boxes).type(
-                        torch.int32
-                    ),  # cant be uint8!! weird error with conversion
-                    "masks": torch.Tensor(masks).type(torch.uint8),
-                    "categories": torch.Tensor(cats),
+                {  # boxes cant be uint8!! weird error with conversion
+                    "boxes": torch.Tensor(boxes).type(torch.int32),
+                    "masks": torch.Tensor(masks).type(torch.bool),
+                    "categories": torch.Tensor(cats).type(torch.int16),
                 }
             ),
         }

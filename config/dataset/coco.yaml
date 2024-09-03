@@ -1,7 +1,8 @@
-split: train  # train or val
+split: val  # train or val
 year: 2017 #2014 or 2017
 
-#dont change, loads the appropriate class
+#dont change, loads the appropriate class and such...
+name: coco
 class_name: CocoLoader
 split_fn: get_coco_split
 root: /mnt/vrg2/imdec/datasets/COCO #root where coco is loaded
