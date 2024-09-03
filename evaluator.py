@@ -1,31 +1,16 @@
 from torchmetrics import MetricCollection
 import torch
 import torchvision
-from torchmetrics.classification import JaccardIndex
-from torchmetrics.detection.iou import IntersectionOverUnion
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import numpy as np
 from tqdm import tqdm
+import pandas as pd
 
 import utils
 from datasets.dataset_loading import CocoLoader, get_coco_split
 import segmentation_models
 import detection_models
 import matching
-
-
-# TODO: move to utils?? remove? should not filter out images,
-def filter_images(images, metadata):
-    # Calculate where_zero array, 1 if no boxes, 0 if boxes
-    filtered_images = []
-    filtered_metadata = []
-
-    for j in range(len(images)):
-        if len(metadata[j]["boxes"]) == 0:  # no boxes?
-            continue
-        filtered_images.append(images[j])
-        filtered_metadata.append(metadata[j])
-    return filtered_images, filtered_metadata
 
 
 def to_dict_for_map(objects, classes, scores, object_type):
@@ -57,7 +42,7 @@ def to_dict_for_map(objects, classes, scores, object_type):
             for instance_objects in objects
         ]
     else:
-        classes = [  # retype classes to torch int32
+        classes = [  # retype class_labels to torch int32
             torch.Tensor(instance_classes).type(torch.int32)
             for instance_classes in classes
         ]
@@ -152,7 +137,7 @@ class Evaluator:
         gt_classes = [instance["categories"] for instance in metadata]
         return {"boxes": gt_boxes, "masks": gt_masks, "classes": gt_classes}
 
-    def calculate_metrics(self, results, gt, object_type="boxes"):
+    def update_metrics(self, results, gt, object_type="boxes"):
         """
         Calculates segmentation/detection metrics for the given inferred and ground truth boxes.
         Args:
@@ -207,27 +192,6 @@ class Evaluator:
             elif object_type == "masks":
                 self.iou_masks.extend(match_ious)
 
-        # # TODO: dont need this??, just extend self.iou_boxes and save to pandas?
-        # for gt_box_list, box_list, shape in zip(
-        #     gt_boxes, selected_boxes, images_shapes
-        # ):
-        #     if len(gt_box_list) == 0:
-        #         continue
-
-        #     # convert boxes to masks using original shape
-        #     box_list_as_mask = utils.boxes_to_masks(box_list, shape)
-        #     gt_box_list_as_mask = utils.boxes_to_masks(gt_box_list, shape)
-
-        #     # pair boxes together
-        #     for gt, inferred in zip(
-        #         box_list_as_mask,
-        #         gt_box_list_as_mask,
-        #     ):
-        #         iou = self.det_iou_metric.forward(
-        #             inferred.to(self.device), gt.to(self.device)
-        #         )
-        #         self.iou_boxes.append(iou.cpu())
-
     def get_metrics(self):
         """
         Do final calculation of torchmetrics classes and wrap the results in a dict
@@ -272,8 +236,8 @@ class Evaluator:
             Metrics are stored in the torchmetrics classes, and can be accessed with get_metrics()
         """
 
-        for i, batch in tqdm(enumerate(data_loader)):
-            if (max_batch is not None) and (i > max_batch):
+        for batch_idx, batch in tqdm(enumerate(data_loader)):
+            if (max_batch is not None) and (batch_idx > max_batch):
                 break
             images = list(batch[0])
             metadata = list(batch[1])
@@ -287,9 +251,7 @@ class Evaluator:
             )  # need metadata for GT
 
             # detection metrics
-            self.calculate_metrics(
-                results=detection_results, gt=gt, object_type="boxes"
-            )
+            self.update_metrics(results=detection_results, gt=gt, object_type="boxes")
 
             # can do box transforms here
             if self.boxes_transform is not None:
@@ -300,11 +262,11 @@ class Evaluator:
                 segmentation_results = self.model_seg.infer_batch(
                     images, detection_results
                 )
+
                 # if segmentation, then calculate metrics
-                segmentation_results["class_labels"] = detection_results[
-                    "class_labels"
-                ]  # implant labels from detection
-                self.calculate_metrics(
+                segmentation_results["class_labels"] = detection_results["class_labels"]
+
+                self.update_metrics(
                     results=segmentation_results, gt=gt, object_type="masks"
                 )
 

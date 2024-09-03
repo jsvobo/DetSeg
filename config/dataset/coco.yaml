@@ -1,4 +1,4 @@
-split: val  # train or val
+split: train  # train or val
 year: 2017 #2014 or 2017
 
 #dont change, loads the appropriate class

@@ -32,20 +32,12 @@ class Sam2Wrapper(BaseSegmentWrapper):
         """
         pass
 
-    def infer_batch(
-        self,
-        images,
-        boxes=None,
-        point_coords=None,
-        point_labels=None,
-    ):
+    def infer_batch(self, images, detection_results):
         """
         Perform inference on a batch of images.
         Args:
             images (Tensor): A tensor containing the input images.
-            boxes (Tensor, optional): A tensor containing the bounding boxes for each image. Defaults to None.
-            point_coords (Tensor, optional): A tensor containing the coordinates of points of interest for each image. Defaults to None.
-            point_labels (Tensor, optional): A tensor containing the labels of points of interest for each image. Defaults to None.
+            detection_results: dict coming from detection models
         Returns:
             Tensor: A tensor containing the predicted outputs for each box
         """

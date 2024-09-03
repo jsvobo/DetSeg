@@ -20,7 +20,7 @@ def prepare_sam(device, model, cfg=None):
     config_path = (
         cfg.sam_path_config
         if cfg is not None
-        else "./config/segmentation/other/sam1_paths.yaml"
+        else "./config/segmentation/other/sam1_paths.yaml"  # load where checkpoint paths are stored
     )
     with open(config_path, "r") as f:
         subconfig = yaml.safe_load(f)[model]
