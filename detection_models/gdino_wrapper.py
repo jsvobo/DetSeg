@@ -70,7 +70,11 @@ class GroundingDinoTiny(GrDINO):
             image = item["image"]
             output = self.detect_individual(image)
             results.append(
-                {"boxes": output["boxes"], "labels": [0 for _ in output["labels"]]}
+                {
+                    "boxes": output["boxes"],
+                    "labels": [0 for _ in output["labels"]],
+                    "scores": output["scores"],
+                }
             )
         return results
 

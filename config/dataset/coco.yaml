@@ -5,4 +5,4 @@ year: 2017 #2014 or 2017
 name: coco
 class_name: CocoLoader
 split_fn: get_coco_split
-root: /mnt/vrg2/imdec/datasets/COCO #root where coco is loaded
+root: /mnt/vrg2/imdec/datasets/COCO #root where coco is loaded, change to point to your coco dataset

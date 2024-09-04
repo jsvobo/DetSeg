@@ -6,6 +6,7 @@ import pprint
 from omegaconf import DictConfig, OmegaConf
 import torch
 import pandas as pd
+import utils
 
 
 def save_results(results, cfg):
@@ -20,7 +21,11 @@ def save_results(results, cfg):
     dir_path = cfg.save_path
     det_name = cfg.detector.class_name
     seg_name = cfg.segmentation.class_name + "_" + cfg.segmentation.sam_model
-    num_data = int(cfg.batch_size * cfg.max_batch)
+    num_data = (
+        int(cfg.batch_size * cfg.max_batch)
+        if cfg.max_batch is not None
+        else "5000"  # 5000 val, ? test
+    )
     prompts = cfg.class_list.name
     split = cfg.dataset.split
     dataset_name = cfg.dataset.name
@@ -42,6 +47,24 @@ def save_results(results, cfg):
     print(f"Results saved to {path}")
 
 
+bbox_area_ranges = {
+    "S": (float(0**2), float(32**2)),
+    "M": (float(32**2), float(96**2)),
+    "L": (float(96**2), float(1e5**2)),
+}
+# as in https://github.com/Lightning-AI/torchmetrics/blob/master/src/torchmetrics/detection/_mean_ap.py
+
+
+def find_range(area):
+    """
+    Find the range of the area of a bounding box
+    """
+    for key, value in bbox_area_ranges.items():
+        if value[0] <= area < value[1]:
+            return key
+    return "larger"
+
+
 def load_results(dir_path, print_conf=False):
     """
     Load the saved results from a folder
@@ -60,6 +83,13 @@ def load_results(dir_path, print_conf=False):
     # load individual IoU results from pickle
     array_boxes = pd.read_pickle(os.path.join(dir_path, "boxes_df.pkl"))
     array_masks = pd.read_pickle(os.path.join(dir_path, "masks_df.pkl"))
+
+    # calculate area of and boxes
+    gt_boxes = array_boxes["gt"]
+    area_boxes = [utils.area(box) for box in gt_boxes]
+    area_type = [find_range(area) for area in area_boxes]
+    array_boxes["area"] = area_type
+    array_masks["area"] = area_type
 
     return results, config, array_boxes, array_masks
 

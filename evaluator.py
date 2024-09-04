@@ -334,6 +334,8 @@ class Evaluator:
                     results=segmentation_results, gt=gt, object_type="masks"
                 )
 
+            # clear memory
+            torch.cuda.empty_cache()
         # I can return the metrics after this, otherwise error
         self.evaluated = True
 
