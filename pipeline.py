@@ -77,8 +77,8 @@ class Pipeline:
         """
         Structured output of the results
         """
-        mean_seg_IoU = result_dict["mean seg IoU"]
-        mean_det_IoU = result_dict["mean det IoU"]
+        mean_seg_IoU = result_dict["average seg IoU"]
+        mean_det_IoU = result_dict["average det IoU"]
 
         print("\nResults:")
         print("Detection metrics:")

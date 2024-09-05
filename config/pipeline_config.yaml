@@ -17,7 +17,8 @@ save_results: True
 print_results: True
 save_path: ./out/pipeline_results/
 evaluator: 
-    #empty for now. can add, what you put here goes into evaluator class
+  add_inverse : True
+  # try to add an inverse mask to and maybe correct some of the images
 
 
 # disable making directories for the outputs 

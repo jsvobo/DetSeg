@@ -112,6 +112,8 @@ class Evaluator:
             "iou": [],
             "gt_class": [],
         }
+
+        self.image_dict = {"image_id": [], "num_detections": []}
         self.evaluated = False
 
         # batch metrics, mAP, but CA/classless
@@ -176,9 +178,18 @@ class Evaluator:
             self.masks_dict["iou"].extend(ious)
             self.masks_dict["match"].extend(matches)
 
-    def prepare_gt(self, metadata):
+    def store_images(self, base_idx, detection_results):
+        # for every image, store how many detections there are
+        for i, detections in enumerate(detection_results["boxes"]):
+            image_id = base_idx + i
+            num_detections = len(detections)
+            self.image_dict["image_id"].append(image_id)
+            self.image_dict["num_detections"].append(num_detections)
+
+    def prepare_gt(self, metadata, base_idx):
         # processes metadata of an image to access gt boxes, masks and classes,
         gt_boxes, gt_masks, gt_classes = [], [], []
+        counter = base_idx  # image number?
         for idx_in_batch, instance in enumerate(metadata):
             # extract from metadata
             boxes = instance["boxes"]
@@ -186,8 +197,8 @@ class Evaluator:
             classes = instance["categories"]
 
             # add to dicts for saving. gt masks/boxes and classes
-            self.store_gt(boxes, masks, classes, self.image_counter)
-            self.image_counter += 1  # added one images gts to dicts
+            self.store_gt(boxes, masks, classes, counter)
+            counter += 1  # added one images gts to dicts
 
             # add to lists to return to eval for batch
             gt_boxes.append(boxes)
@@ -240,10 +251,24 @@ class Evaluator:
 
         # 1:1 matching and IoU calculation for each image
         for batch_idx in range(len(detected_objects)):
+            to_match_per_img = detected_objects[batch_idx].cpu()
+            scores_per_img = detected_scores[batch_idx].cpu()
+            gt_objects_per_img = gt_objects[batch_idx].cpu()
+
+            # add inverse masks
+            if object_type == "masks" and self.cfg.add_inverse:
+
+                if to_match_per_img.shape[0] != 0:  # if somethign detected
+                    inverse = ~to_match_per_img
+                    to_match_per_img = torch.concat((to_match_per_img, inverse), dim=0)
+                    scores_per_img = torch.concat(
+                        (scores_per_img, scores_per_img), dim=0
+                    )
+
             matched_detections, match_ious = self.matching(
-                gt=gt_objects[batch_idx].cpu(),  # tensor
-                det=detected_objects[batch_idx].cpu(),  # tensor
-                det_scores=detected_scores[batch_idx].cpu(),  # tensor
+                gt=gt_objects_per_img,  # tensor
+                det=to_match_per_img,  # tensor
+                det_scores=scores_per_img,  # tensor
                 iou_type=object_type,
             )
             self.store_matches(matched_detections, match_ious, object_type)
@@ -258,14 +283,15 @@ class Evaluator:
         # finally create dataframes from the dicts, filled with []
         self.masks_dict = pd.DataFrame(self.masks_dict)
         self.boxes_dict = pd.DataFrame(self.boxes_dict)
+        self.image_dict = pd.DataFrame(self.image_dict)
 
         det_iou = np.mean(np.array(self.boxes_dict["iou"]))
         seg_iou = np.mean(np.array(self.masks_dict["iou"]))
 
         result_dict = {
             # Average IoUs for boxes and masks
-            "mean det IoU": float(det_iou),
-            "mean seg IoU": float(seg_iou),
+            "average det IoU": float(det_iou),
+            "average seg IoU": float(seg_iou),
             # mAPs , classless and per class for both seg,det
             "classless mAP - detection": utils.convert_tensors_to_save(
                 self.det_map_classless.compute()
@@ -285,6 +311,7 @@ class Evaluator:
             "metrics": result_dict,
             "masks_df": self.masks_dict,
             "boxes_df": self.boxes_dict,
+            "image_level_df": self.image_dict,
         }
 
     def evaluate(self, data_loader, savepath=None, max_batch=None):
@@ -299,7 +326,7 @@ class Evaluator:
             None
             Metrics are stored in the torchmetrics classes, and can be accessed with get_metrics()
         """
-
+        base_idx = 0
         for batch_idx, batch in tqdm(enumerate(data_loader)):
             if (max_batch is not None) and (batch_idx >= max_batch):
                 break
@@ -307,7 +334,7 @@ class Evaluator:
             metadata = list(batch[1])
 
             # list of list of mask/boxes and classes as GT
-            gt = self.prepare_gt(metadata)
+            gt = self.prepare_gt(metadata, base_idx)
 
             # detection module. attention points and labels possible with detection classes
             detection_results = self.model_det.detect_batch(
@@ -316,6 +343,9 @@ class Evaluator:
 
             # detection metrics
             self.update_metrics(results=detection_results, gt=gt, object_type="boxes")
+
+            # store number of detections per image (and other stuff)
+            self.store_images(base_idx, detection_results)
 
             # can do box transforms here
             if self.boxes_transform is not None:
@@ -336,6 +366,7 @@ class Evaluator:
 
             # clear memory
             torch.cuda.empty_cache()
+            base_idx += len(images)
         # I can return the metrics after this, otherwise error
         self.evaluated = True
 

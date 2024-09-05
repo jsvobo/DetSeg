@@ -75,6 +75,13 @@ class CocoLoader(CocoDetection):
     def CatID_new_to_old(self, catID):  # from new category to its old category
         return self.new_to_old_cat_translation_table[catID]
 
+    def class_name_to_new_ID(self, name):
+        list_names = self.get_classes()
+        if name in list_names:
+            return list_names.index(name)
+        else:
+            return -1
+
     def get_api(self):
         return self.coco
 
