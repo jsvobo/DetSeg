@@ -180,6 +180,7 @@ class Evaluator:
 
     def store_images(self, base_idx, detection_results):
         # for every image, store how many detections there are
+        # TODO: add all detections and/or masks
         for i, detections in enumerate(detection_results["boxes"]):
             image_id = base_idx + i
             num_detections = len(detections)
@@ -198,7 +199,7 @@ class Evaluator:
 
             # add to dicts for saving. gt masks/boxes and classes
             self.store_gt(boxes, masks, classes, counter)
-            counter += 1  # added one images gts to dicts
+            counter += 1  # added one images gts to dicts, increment local counter
 
             # add to lists to return to eval for batch
             gt_boxes.append(boxes)
@@ -255,7 +256,7 @@ class Evaluator:
             scores_per_img = detected_scores[batch_idx].cpu()
             gt_objects_per_img = gt_objects[batch_idx].cpu()
 
-            # add inverse masks
+            # add inverse masks if needed
             if object_type == "masks" and self.cfg.add_inverse:
 
                 if to_match_per_img.shape[0] != 0:  # if somethign detected
@@ -265,6 +266,7 @@ class Evaluator:
                         (scores_per_img, scores_per_img), dim=0
                     )
 
+            # match 1:1 and store the matches.
             matched_detections, match_ious = self.matching(
                 gt=gt_objects_per_img,  # tensor
                 det=to_match_per_img,  # tensor

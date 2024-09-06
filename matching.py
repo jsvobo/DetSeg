@@ -5,11 +5,12 @@ import torch
 
 def iou_against_one_box(one, multiple_boxes):
     # one box and a list against it
-    return [utils.get_IoU_boxes(one, box) for box in multiple_boxes]
+    return [utils.get_IoU_boxes(one, box_tuple[0]) for box_tuple in multiple_boxes]
 
 
 def iou_against_one_mask(one, multiple_masks):
-    return [utils.get_IoU_masks(one, mask) for mask in multiple_masks]
+    # multiple masks comes in a form of a list of tuples. tuple:(mask,index in gt)
+    return [utils.get_IoU_masks(one, mask_tuple[0]) for mask_tuple in multiple_masks]
 
 
 def matching_fn(gt_full_array, det, det_scores, threshold=0.5, iou_type="boxes"):
@@ -38,11 +39,15 @@ def matching_fn(gt_full_array, det, det_scores, threshold=0.5, iou_type="boxes")
     assert (det_scores <= 1).all, "Detection scores must be smaller or equal to 1"
 
     # arrays holding results, init as default
-    match_indices = -np.ones(len(gt_full_array), dtype=np.int32)  # -1 if no match
+    match_indices = -np.ones(
+        len(gt_full_array), dtype=np.int32
+    )  # -1 if no match, index if match in det array
     match_ious = np.zeros(len(gt_full_array), dtype=np.float32)  # 0 if no match
 
     # convert GT to list for pop-ing, detection & score array for sorting
-    gt_list = list(gt_full_array)  # list for pop-ing! , need to remove matched GTs
+    gt_list = list(
+        [(gt_object, i) for i, gt_object in enumerate(gt_full_array)]
+    )  # list for pop-ing! , need to remove matched GTs
     gt_full_array = np.array(gt_full_array)  # need index of something from gt
     det_full_array = np.array(det)  # array for sorting
 
@@ -71,13 +76,8 @@ def matching_fn(gt_full_array, det, det_scores, threshold=0.5, iou_type="boxes")
         if iou_best <= threshold:
             continue  # remaining IoUs are too low, no match for this detected box
 
-        # save which det box is matched with this GT, save IoU
-        if iou_type == "boxes":
-            matches = np.all(gt_full_array == np.array(gt_best), axis=(1))
-            index_of_gt = np.where(matches)[0][0]
-        elif iou_type == "masks":
-            matches = np.all(gt_full_array == np.array(gt_best), axis=(1, 2))
-            index_of_gt = np.where(matches)[0][0]
+        # which gt is this one in the original array?
+        index_of_gt = gt_best[1]
 
         match_indices[index_of_gt] = det_index
         match_ious[index_of_gt] = iou_best

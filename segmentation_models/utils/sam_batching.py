@@ -24,11 +24,11 @@ def _select_best_masks(batched_output, resulting_masks, index_list):
 
         # take this mas and its quality
         arange = torch.arange(best.shape[0])
-        predicted_iou = pred_qualities[arange, best]
-        best_masks = dict_output["masks"][arange, best]
+        predicted_iou = pred_qualities[arange, best].cpu()
+        best_masks = dict_output["masks"][arange, best].cpu()
 
         resulting_masks[index_list[idx_in_batch]] = (
             best_masks  # add mask where there is any
         )
         iou_preds[index_list[idx_in_batch]] = predicted_iou
-    return {"masks": resulting_masks, "confidence": iou_preds}
+    return {"masks": resulting_masks, "confidence": iou_preds}  # on cpu

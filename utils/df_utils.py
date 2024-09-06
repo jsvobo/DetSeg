@@ -153,9 +153,6 @@ def do_overview(path, name="Coco classes", coco_dataset=None):
     print("\nfraction of GTs missed, det and seg:")
     print(frac_miss_box)
     print(frac_miss_mask)
-    print("total number of missed GTs, det and seg:")
-    print(miss_box)
-    print(miss_mask)
 
     # print selected result metrics
     print("\ndetection average IoU: ", results["average det IoU"])

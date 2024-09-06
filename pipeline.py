@@ -77,17 +77,17 @@ class Pipeline:
         """
         Structured output of the results
         """
-        mean_seg_IoU = result_dict["average seg IoU"]
-        mean_det_IoU = result_dict["average det IoU"]
+        avg_det_iou = result_dict["average seg IoU"]
+        avg_det_iou = result_dict["average det IoU"]
 
         print("\nResults:")
         print("Detection metrics:")
-        print(f"    Mean IoU: {round(float(mean_det_IoU),3)}")
+        print(f"    Average IoU: {round(float(avg_det_iou),3)}")
         pprint.pprint(result_dict["classless mAP - detection"])  # add more dicts here?
 
         if self.cfg.segmentation.class_name != "None":
             print("Segmentation metrics:")
-            print(f"    Mean IoU: {round(float(mean_seg_IoU),3)}")
+            print(f"    Average IoU: {round(float(avg_det_iou),3)}")
             pprint.pprint(result_dict["classless mAP - segmentation"])
 
     def run(self, cfg: dict):
