@@ -30,6 +30,10 @@ class Pipeline:
         year = cfg.year
         root = cfg.root
 
+        transforms = cfg.transforms
+        if transforms != "None":  # get the specific transforms from datasets module
+            transforms = getattr(datasets, transforms)()
+
         dataset_class = cfg.class_name
         get_path = cfg.split_fn
 

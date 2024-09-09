@@ -1,5 +1,6 @@
 split: val  # train or val
 year: 2017 #2014 or 2017
+transforms: None
 
 #dont change, loads the appropriate class and such...
 name: coco

@@ -7,6 +7,7 @@ from omegaconf import DictConfig, OmegaConf
 import torch
 import pandas as pd
 import utils
+import datasets
 
 
 class ResultSaver:
@@ -95,6 +96,30 @@ class ResultLoader:
 
         if not os.path.exists(self.path):
             print("Directory does not exist.")
+            return
+
+        # prepare dataset from config, which is loaded from the folder
+
+    def load_same_dataset(self):
+        """
+        loads the same dataset which was used for inference, base don config
+        """
+        cfg = self.load_config()["dataset"]
+        split = cfg["split"]
+        year = cfg["year"]
+        root = cfg["root"]
+        dataset_class = cfg["class_name"]
+        get_path = cfg["split_fn"]
+
+        if "transforms" in cfg.keys():
+            transforms = cfg["transforms"]
+            if transforms != "None":  # get the specific transforms from datasets module
+                transforms = getattr(datasets, transforms)()
+        else:
+            transforms = None
+
+        dataset_path = getattr(datasets, get_path)(split=split, year=year, root=root)
+        return getattr(datasets, dataset_class)(dataset_path, transform=transforms)
 
     def load_matched_boxes(self):
         boxes_df = pd.read_pickle(os.path.join(self.path, "boxes_df.pkl"))
