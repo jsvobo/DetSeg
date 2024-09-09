@@ -125,6 +125,7 @@ class CocoLoader(CocoDetection):
                     "categories": torch.Tensor(cats).type(torch.int16),
                 }
             ),
+            "index": index,
         }
 
     def catIDs_to_names(self, catIDs):
@@ -139,7 +140,8 @@ class CocoLoader(CocoDetection):
         def collate_fn(batch):
             images = [item["image"] for item in batch]
             annotations = [item["annotations"] for item in batch]
-            return images, annotations
+            idcs = [item["index"] for item in batch]
+            return images, annotations, idcs
 
         data_loader = DataLoader(
             self,
