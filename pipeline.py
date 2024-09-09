@@ -7,7 +7,7 @@ from omegaconf import DictConfig, OmegaConf
 import pprint
 
 import utils
-import datasets.dataset_loading as datasets
+import datasets
 import detection_models
 import segmentation_models
 from evaluator import Evaluator
@@ -71,24 +71,24 @@ class Pipeline:
         mb = cfg.max_batch
         cfg.max_batch = None if mb == "None" else int(mb)
         cfg.dataset.year = str(cfg.dataset.year)
+
+        cfg.evaluator.save_results = cfg.save_results
         return cfg
 
-    def print_results(self, result_dict):
+    def print_result_dict(self, result_dict):
         """
-        Structured output of the results
+        Structured output of the results for det and seg metrics
         """
-        avg_det_iou = result_dict["average seg IoU"]
-        avg_det_iou = result_dict["average det IoU"]
+        det = result_dict["detection"]
+        seg = result_dict["segmentation"]
 
         print("\nResults:")
         print("Detection metrics:")
-        print(f"    Average IoU: {round(float(avg_det_iou),3)}")
-        pprint.pprint(result_dict["classless mAP - detection"])  # add more dicts here?
+        utils.print_for_task(det)
 
         if self.cfg.segmentation.class_name != "None":
             print("Segmentation metrics:")
-            print(f"    Average IoU: {round(float(avg_det_iou),3)}")
-            pprint.pprint(result_dict["classless mAP - segmentation"])
+            utils.print_for_task(seg)
 
     def run(self, cfg: dict):
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -111,9 +111,13 @@ class Pipeline:
         boxes_transform = None
         # no transformation for now. load from config? prepare func for transform
 
+        # saver class, works with the batches and overall results
+        saver = datasets.ResultSaver(cfg)
+
         # Instantiate the Evaluator with the requested parameters
         evaluator = Evaluator(
             cfg=cfg.evaluator,
+            saver=saver,
             device=device,
             model_det=detector,
             model_seg=segmentation_model,
@@ -127,17 +131,15 @@ class Pipeline:
 
         # run the evaluation and collect results
         evaluator.evaluate(data_loader, max_batch=cfg.max_batch)
-        results = evaluator.get_metrics()
+        results = evaluator.get_results()
 
-        if print_results:
-            self.print_results(results["metrics"])
+        if print_results:  # print results if requested
+            self.print_result_dict(results["metrics"])
 
-        # save result dictionary and metadata to a file.
-        if save_results:
-            utils.save_results(
-                results=results,
-                cfg=cfg,
-            )
+        if (
+            save_results
+        ):  # save results using saver her. results per image are saved inside the evaluator
+            saver.save_results(results)
 
 
 @hydra.main(config_path="config", config_name="pipeline_config.yaml", version_base=None)

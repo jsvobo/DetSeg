@@ -6,39 +6,12 @@ import torch
 import utils
 
 import pprint
-from datasets.dataset_loading import CocoLoader, get_coco_split
+import datasets
+
+show = 10  # how many rows to show in the dataframe
 
 
-show = 10
-
-
-def plot_box_histogram(df, name, object_type):
-    iou_array = df["iou"]
-    lspace = np.linspace(0.0, 1.0, 100)
-
-    # Calculate the number of objects in each bin
-    hist, bins, _ = plt.hist(iou_array, bins=lspace)
-
-    # Find the bin index where the mean value of IoU_array falls
-    mean_threshold = np.mean(iou_array)
-    median_threshold = np.median(iou_array)
-    plt.axvline(x=mean_threshold, color="red", linestyle="--")
-    plt.axvline(x=median_threshold, color="black", linestyle="--")
-    # Add labels and title
-    plt.xlabel("IoU")
-    plt.ylabel("Frequency")
-
-    size = len(iou_array)
-    plt.title(f"{name}, per GT instance IoU histogram: {object_type}")  # {size} samples
-
-    mean = "{:.2f}".format(mean_threshold)
-    median = "{:.2f}".format(median_threshold)
-    plt.legend([f"Mean - {mean}", f"Median - {median}"])
-    # Show the plot
-    plt.show()
-
-
-def aggregate_by_sizes(frame, to_print=True):
+def _aggregate_by_sizes(frame, to_print=True):
     # aggregate misses by area
 
     # filter out GT with no matches
@@ -71,15 +44,15 @@ def aggregate_by_sizes(frame, to_print=True):
     return df.sort_index()
 
 
-def aggregate_missed_by_classes(frame, coco_dataset, to_print=True):
+def aggregate_missed_by_classes(frame, dataset, to_print=True):
     filtered = frame[frame["iou"] == 0]
 
-    class_indices = coco_dataset.get_cat_keys()
-    category_names = coco_dataset.get_classes()
+    class_indices = dataset.get_cat_keys()
+    category_names = dataset.get_classes()
 
     frequencies = [len(filtered[filtered["gt_class"] == idx]) for idx in class_indices]
     totals = [len(frame[frame["gt_class"] == idx]) for idx in class_indices]
-    percentage_missed = [f / t for f, t in zip(frequencies, totals)]
+    percentage_missed = [f / t if t != 0 else 0 for f, t in zip(frequencies, totals)]
 
     df = pd.DataFrame(
         {
@@ -100,79 +73,41 @@ def aggregate_missed_by_classes(frame, coco_dataset, to_print=True):
     return df.sort_index()
 
 
-def print_subresults(results):
-    print("     mAP: ", results["map"])
-    print("     mAR - small: ", results["mar_small"])
-    print("     mAR - medium: ", results["mar_medium"])
-    print("     mAR - large: ", results["mar_large"])
-
-
-def do_overview(path, name="Coco classes", coco_dataset=None):
-    # load data
-    loaded_dict = utils.load_results(path, print_conf=False)
-
-    # parse back
-    config = loaded_dict["config"]
-    frame_boxes = loaded_dict["boxes_df"]
-    frame_masks = loaded_dict["masks_df"]
-    results = loaded_dict["results"]
-    frame_images = loaded_dict["image_level_df"]
-
-    # missed parts
-    miss_box = len(frame_boxes[frame_boxes["iou"] == 0])
-    miss_mask = len(frame_masks[frame_masks["iou"] == 0])
-    total_GTs = len(frame_boxes)
+def do_overview(loader: datasets.ResultLoader):
+    full_metrics = loader.load_metrics()
+    config = loader.load_config()
+    frame_boxes = loader.load_matched_boxes()
+    frame_masks = loader.load_matched_masks()
 
     # main info
-    print("prompt list: ", config["class_list"]["name"])
-
-    # total detections?
-    total_detections = frame_images["num_detections"].sum()
-    print("\nTotal detections: ", total_detections)
-    print("Total GTs: ", total_GTs)
-    print("Detection FP: ", total_detections - total_GTs + miss_box)
-    print("Segementation FP: ", total_detections - total_GTs + miss_mask)
-
-    # precisiona nd recall: baxes and masks
-    TP_boxes = total_GTs - miss_box
-    precision_box = TP_boxes / total_detections
-    recall_box = TP_boxes / total_GTs
-
-    TP_masks = total_GTs - miss_mask
-    precision_mask = TP_masks / total_detections
-    recall_mask = TP_masks / total_GTs
-
-    print("\nDetection precision: ", precision_box)
-    print("Detection recall: ", recall_box)
-    print("Segmentation precision: ", precision_mask)
-    print("Segmentation recall: ", recall_mask)
-
-    frac_miss_box = miss_box / total_GTs
-    frac_miss_mask = miss_mask / total_GTs
-
-    print("\nfraction of GTs missed, det and seg:")
-    print(frac_miss_box)
-    print(frac_miss_mask)
+    name = config["class_list"]["name"]
+    print("prompt list: ", name)
 
     # print selected result metrics
-    print("\ndetection average IoU: ", results["average det IoU"])
-    print_subresults(results["classless mAP - detection"])
-    print("segmentation average IoU: ", results["average seg IoU"])
-    print_subresults(results["classless mAP - detection"])
+    print("Detection:")
+    det = full_metrics["detection"]
+    utils.print_for_task(d=det)
+
+    print("Segmentation:")
+    seg = full_metrics["segmentation"]
+    utils.print_for_task(d=seg)
 
     # show histograms for boxes and masks without non-matches
-    plot_box_histogram(frame_boxes[frame_boxes["iou"] != 0], name, object_type="boxes")
-    plot_box_histogram(frame_masks[frame_masks["iou"] != 0], name, object_type="masks")
-
-
-def load_missed_aggregate_per_class(path, coco_dataset):
-    results, config, frame_boxes, frame_masks = utils.load_results(
-        path, print_conf=False
+    utils.plot_box_histogram(
+        frame_boxes[frame_boxes["iou"] != 0], name, object_type="boxes"
+    )
+    utils.plot_box_histogram(
+        frame_masks[frame_masks["iou"] != 0], name, object_type="masks"
     )
 
+
+def load_missed_aggregate_per_class(loader, dataset):
+    frame_boxes = loader.load_matched_boxes()
+    frame_masks = loader.load_matched_masks()
+
     # aggregate boxes and masks
-    boxes = aggregate_missed_by_classes(frame_boxes, coco_dataset, to_print=False)
-    masks = aggregate_missed_by_classes(frame_masks, coco_dataset, to_print=False)
+    boxes = aggregate_missed_by_classes(frame_boxes, dataset, to_print=False)
+    masks = aggregate_missed_by_classes(frame_masks, dataset, to_print=False)
 
     return {
         "boxes_per_class": boxes,
@@ -189,22 +124,24 @@ def squish_df(df):
     return df
 
 
-def comparison(paths, names, coco_dataset):
+def prompt_sets_comparison(paths, names, dataset):
     absolute = {}
     percentage = {}
 
     # unwrap paths and names, load frames and concatenate into a df
     for path, name in zip(paths, names):  # dont calculate area here! no area!
         b = pd.read_pickle(os.path.join(path, "boxes_df.pkl"))  # load directly
-        b = aggregate_missed_by_classes(b, coco_dataset, to_print=False)
+        b = aggregate_missed_by_classes(b, dataset, to_print=False)
         absolute[name] = b["missed"]
         percentage[name] = b["part_missed"]
 
-    # implant categories and totals
+    # implant categories and totals into the df
     cats = b["category"]
     totals = b["total"]
+
     absolute["Category"] = cats
     percentage["Category"] = cats
+
     absolute["Totals"] = totals
     percentage["Totals"] = totals
 

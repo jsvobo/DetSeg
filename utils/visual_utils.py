@@ -7,7 +7,7 @@ from matplotlib.colors import ListedColormap
 import matplotlib.patches as mpatches
 
 
-global_titlesize = 15  # dont touch? not important
+global_titlesize = 15  # not important, title size for this file
 
 
 def show_points(coords, labels, ax, marker_size=300):
@@ -143,6 +143,37 @@ def print_masks_boxes(
         for i, box in enumerate(boxes):  # all masks
             utils.plot_box(box, plt.gca(), linewidth=linewidth)
 
+    plt.show()
+
+
+def plot_box_histogram(df, name, object_type):
+    """
+    plot histogram from dataframe. used for IoU histograms on boxes and masks
+    object_type is either "boxes" or "masks"
+    """
+    assert object_type in ["boxes", "masks"]
+    iou_array = df["iou"]
+    lspace = np.linspace(0.0, 1.0, 100)
+
+    # Calculate the number of objects in each bin
+    hist, bins, _ = plt.hist(iou_array, bins=lspace)
+
+    # Find the bin index where the mean value of IoU_array falls
+    mean_threshold = np.mean(iou_array)
+    median_threshold = np.median(iou_array)
+    plt.axvline(x=mean_threshold, color="red", linestyle="--")
+    plt.axvline(x=median_threshold, color="black", linestyle="--")
+    # Add labels and title
+    plt.xlabel("IoU")
+    plt.ylabel("Frequency")
+
+    size = len(iou_array)
+    plt.title(f"{name}, per GT instance IoU histogram: {object_type}")  # {size} samples
+
+    mean = "{:.2f}".format(mean_threshold)
+    median = "{:.2f}".format(median_threshold)
+    plt.legend([f"Mean - {mean}", f"Median - {median}"])
+    # Show the plot
     plt.show()
 
 

@@ -60,7 +60,9 @@ class GroundingDinoTiny(GrDINO):
             target_sizes=[target_size],
         )
         results = results[0]
-        results["boxes"] = torch.round(results["boxes"].cpu()).type(torch.int32)
+        results["boxes"] = torch.round(results["boxes"].cpu().detach()).type(
+            torch.int32
+        )
         return results
 
     def detect_boxes(self, items):
