@@ -95,3 +95,16 @@ def crop_xyxy(img, mask, box, crop_box):
     cropped_mask = mask[y0:y1, x0:x1]  # need to also crop the w,h
 
     return cropped_img, cropped_mask, box_coords
+
+
+def box_coco_to_sam(coco_box):
+    """
+    Convert coco box to sam box
+    from x0,y0,w,h to x0,y0,x1,y1
+    """
+    return (
+        round(coco_box[0]),
+        round(coco_box[1]),
+        round((coco_box[0] + coco_box[2])),
+        round((coco_box[1] + coco_box[3])),
+    )

@@ -73,7 +73,7 @@ def aggregate_missed_by_classes(frame, dataset, to_print=True):
     return df.sort_index()
 
 
-def do_overview(loader: datasets.ResultLoader):
+def do_overview(loader):
     full_metrics = loader.load_metrics()
     config = loader.load_config()
     frame_boxes = loader.load_matched_boxes()

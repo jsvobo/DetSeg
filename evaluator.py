@@ -7,7 +7,7 @@ from tqdm import tqdm
 import pandas as pd
 
 import utils
-from datasets.dataset_loading import CocoLoader, get_coco_split
+from datasets import CocoLoader, get_coco_split, ImagenetLoader, get_imagenet_split
 import segmentation_models
 import detection_models
 import matching
@@ -228,7 +228,8 @@ class Evaluator:
             self.image_dict["num_detections"].append(num_detections)
 
             # save the result dictionary into one file per image
-            if self.cfg.save_results:
+            if self.cfg.save_results and self.cfg.save_results_per_image:
+                # save anything and save per image
                 self.saver.save_per_image(boxes, masks, image_id)
 
     def prepare_gt(self, metadata, indices):
@@ -259,7 +260,6 @@ class Evaluator:
                 "class_labels" list of lists of classes,
                 "confidence": list of lists of confidence score for each detection
         """
-
         assert object_type in ["boxes", "masks"]
 
         # extract the results
@@ -453,6 +453,7 @@ def test_evaluator():
     evaluator = Evaluator(
         device=device,
         cfg=None,
+        saver=None,
         model_det=detector,
         model_seg=segmentation_model,
         boxes_transform=boxes_transform,

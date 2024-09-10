@@ -74,9 +74,14 @@ class Pipeline:
         # change some small thing, like types from the loaded config
         mb = cfg.max_batch
         cfg.max_batch = None if mb == "None" else int(mb)
-        cfg.dataset.year = str(cfg.dataset.year)
+        if "year" in cfg.dataset.keys():
+            cfg.dataset.year = str(cfg.dataset.year)
+        else:
+            cfg.dataset.year = "None"
 
-        cfg.evaluator.save_results = cfg.save_results
+        cfg.evaluator.save_results = (
+            cfg.save_results
+        )  # want to save detections per image
         return cfg
 
     def print_result_dict(self, result_dict):

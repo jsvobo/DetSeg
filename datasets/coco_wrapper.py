@@ -6,19 +6,7 @@ from torchvision.datasets import CocoDetection
 from torchvision.transforms.functional import pil_to_tensor
 import pycocotools
 from torch.utils.data import DataLoader
-
-
-def box_coco_to_sam(coco_box):
-    """
-    Convert coco box to sam box
-    from x0,y0,w,h to x0,y0,x1,y1
-    """
-    return (
-        round(coco_box[0]),
-        round(coco_box[1]),
-        round((coco_box[0] + coco_box[2])),
-        round((coco_box[1] + coco_box[3])),
-    )
+import utils
 
 
 def get_coco_split(split: str = "train", year: str = "2017", root=None):
@@ -35,7 +23,7 @@ def get_coco_split(split: str = "train", year: str = "2017", root=None):
     assert split in ["train", "val"]
     assert year in ["2014", "2017"]
     if root is None:
-        print("No root provided, using default")
+        print("No root provided, using default: /mnt/vrg2/imdec/datasets/COCO")
         root = "/mnt/vrg2/imdec/datasets/COCO"  # default root of none is provided
 
     annotation_path = os.path.join(root, "annotations")
@@ -49,7 +37,7 @@ def get_coco_split(split: str = "train", year: str = "2017", root=None):
 class CocoLoader(CocoDetection):
 
     def __init__(self, filepaths, transform=None):
-        super(CocoLoader, self).__init__(
+        super().__init__(
             filepaths[0],
             filepaths[1],
             transform=transform,
@@ -102,11 +90,11 @@ class CocoLoader(CocoDetection):
         return [self[offset + i] for i in range(amount)]
 
     def __getitem__(self, index):
-        img, annotations = super(CocoLoader, self).__getitem__(index)
+        img, annotations = super().__getitem__(index)
 
         boxes, masks, cats = [], [], []
         for ann in annotations:
-            box = box_coco_to_sam(ann["bbox"])
+            box = utils.box_coco_to_sam(ann["bbox"])
             boxes.append(box)
             mask = self.coco_ann_to_binary_mask(ann)
             masks.append(np.uint8(mask))
@@ -176,4 +164,4 @@ def test_coco_loading():
 
 if __name__ == "__main__":
     test_coco_loading()
-    # if problem, run as python -m datasets.dataset_loading
+    # if problem, run as python -m datasets.coco_wrapper

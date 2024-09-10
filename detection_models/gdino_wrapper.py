@@ -104,7 +104,7 @@ class GroundingDinoTiny(GrDINO):
         }  # return outputs for all images
 
 
-if __name__ == "__main__":
+def test_grounding_dino_tiny():
     from datasets.dataset_loading import CocoLoader, get_coco_split
 
     transforms = None
@@ -116,3 +116,7 @@ if __name__ == "__main__":
     batch = [item["image"] for item in coco_train_dataset.get_amount(5)]
     outputs = gd.detect_batch(batch)
     print(outputs["class_labels"])
+
+
+if __name__ == "__main__":
+    test_grounding_dino_tiny()
