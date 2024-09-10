@@ -33,12 +33,14 @@ class Pipeline:
         transforms = cfg.transforms
         if transforms != "None":  # get the specific transforms from datasets module
             transforms = getattr(datasets, transforms)()
+        else:
+            transforms = None
 
         dataset_class = cfg.class_name
         get_path = cfg.split_fn
 
         path = getattr(datasets, get_path)(split=split, year=year, root=root)
-        dataset = getattr(datasets, dataset_class)(path, transform=None)
+        dataset = getattr(datasets, dataset_class)(path, transform=transforms)
         return dataset
 
     def prepare_class_list(self, cfg: DictConfig, dataset):

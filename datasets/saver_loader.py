@@ -111,10 +111,10 @@ class ResultLoader:
         dataset_class = cfg["class_name"]
         get_path = cfg["split_fn"]
 
-        if "transforms" in cfg.keys():
+        if "transforms" in cfg.keys() and cfg["transforms"] != "None":
             transforms = cfg["transforms"]
-            if transforms != "None":  # get the specific transforms from datasets module
-                transforms = getattr(datasets, transforms)()
+            # get the specific transforms from datasets module
+            transforms = getattr(datasets, transforms)()
         else:
             transforms = None
 
@@ -161,7 +161,7 @@ class ResultLoader:
         }
 
     def load_results_per_image(self, idx, folder_name="masks_detections"):
-        path = os.path.join(self.path, folder_name, f"detections_{idx}.pkl")
+        path = os.path.join(self.path, folder_name, f"detections_{idx}")
         path_boxes = os.path.join(path, "boxes.npy")
         path_masks = os.path.join(path, "masks.npy")
 
@@ -171,9 +171,11 @@ class ResultLoader:
         if not os.path.exists(path_boxes) or not os.path.exists(path_masks):
             print(f"one of the files does not exist in {path}")
             return None
-        # load boxes and masks
-        return
-        {
-            "boxes": np.load(path_boxes),
-            "masks": np.load(path_masks),
+
+        # load boxes and masks, return in a dict
+        boxes = np.load(path_boxes)
+        masks = np.load(path_masks)
+        return {
+            "boxes": boxes,  # [boxes[i] for i in range(boxes.shape[0])],
+            "masks": masks,
         }

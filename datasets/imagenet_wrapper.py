@@ -37,6 +37,10 @@ class ImagenetLoader(ImageNet):
             split=filepaths[1],
             transform=transform,
         )
+        self.joined_classes = []
+        for class_tuple in self.classes:
+            # self.joined_classes.extend(list(class_tuple))
+            self.joined_classes.append(class_tuple[0])
 
     def get_cat_keys(self):
         # all class numbers
@@ -44,20 +48,14 @@ class ImagenetLoader(ImageNet):
 
     def get_classes(self):
         # return all category names
-        return self.classes
-
-    # def CatID_old_to_new(self, catID):
-    #     # irrelevant here, justo for coco, need this to be backwards compatible?
-    #     return catID
-
-    # def CatID_new_to_old(self, catID):
-    #     # irrelevant here, justo for coco, need this to be backwards compatible?
-    #     return catID
+        # return self.classes
+        return self.joined_classes
 
     def class_name_to_new_ID(self, name):
-        class_dict = self.class_to_idx
-        if name in class_dick.keys():
-            return self.class_to_idx[name]
+        # try to find this word in every tuple, return index of the whole label
+        for class_tuple in self.classes:
+            if name in list(class_tuple):
+                return self.class_to_idx(class_tuple)
         return -1
 
     def get_amount(self, amount, offset=0):
@@ -124,4 +122,4 @@ def test_imagenet_loading():
 
 if __name__ == "__main__":
     test_imagenet_loading()
-    # if problem, run as python -m datasets.dataset_loading
+    # if problem, run as python -m datasets.imagenet_wrapper
