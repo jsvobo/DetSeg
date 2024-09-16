@@ -9,6 +9,10 @@ import pandas as pd
 import utils
 import datasets
 
+import torchvision.transforms as T
+from PIL import Image
+from torchvision.io import write_png
+
 
 class ResultSaver:
 
@@ -42,13 +46,14 @@ class ResultSaver:
         os.makedirs(self.path, exist_ok=True)
         os.makedirs(self.masks_detections_folder, exist_ok=True)
 
-    def save_per_image(self, boxes, masks, image_id):
+    def save_per_image(self, boxes, masks, labels, image_id):  # 2.3 GB
         subfolder_name = f"detections_{image_id}"
         folder_name = os.path.join(self.masks_detections_folder, subfolder_name)
         os.makedirs(folder_name, exist_ok=True)  # make and folder for every image
 
-        np.save(os.path.join(folder_name, "boxes.npy"), boxes)
-        np.save(os.path.join(folder_name, "masks.npy"), masks)
+        np.savez_compressed(os.path.join(folder_name, "boxes.npz"), pred=boxes)
+        np.savez_compressed(os.path.join(folder_name, "masks.npz"), pred=masks)
+        np.savez_compressed(os.path.join(folder_name, "labels.npz"), pred=labels)
 
     def save_results(self, results):
         path = self.path
@@ -85,7 +90,7 @@ class ResultSaver:
             f"\nResults saved to {path} \n with files:\
 image_df.pkl, boxes_df.pkl, masks_df.pkl,\
 config.json, results.json, and folder masks_detections.\
-\nThis folder has a file for *every image* named detections_<image_id>.pkl"
+\nThis folder has a file for *every image* named detections_<image_id>"
         )
 
 
@@ -161,21 +166,35 @@ class ResultLoader:
         }
 
     def load_results_per_image(self, idx, folder_name="masks_detections"):
+        """
+        idx : id of image to ge loaded
+        folder_name : folder where the detections are saved inside the main folder (where config and results are saved)
+            - if you dont have different structure, then dont provide any, default is fine
+        """
         path = os.path.join(self.path, folder_name, f"detections_{idx}")
         path_boxes = os.path.join(path, "boxes.npy")
         path_masks = os.path.join(path, "masks.npy")
+        path_labels = os.path.join(
+            path, "labels.npy"
+        )  # labels proposed by detector. if all 0, then the detector cann0t predict classes well
 
         if not os.path.exists(path):
             print(f"Folder {path} does not exist.")
             return None
-        if not os.path.exists(path_boxes) or not os.path.exists(path_masks):
+        if (
+            not os.path.exists(path_boxes)
+            or not os.path.exists(path_masks)
+            or not os.path.exists(path_labels)
+        ):
             print(f"one of the files does not exist in {path}")
             return None
 
         # load boxes and masks, return in a dict
         boxes = np.load(path_boxes)
         masks = np.load(path_masks)
+        labels = np.load(path_labels)
         return {
             "boxes": boxes,  # [boxes[i] for i in range(boxes.shape[0])],
             "masks": masks,
+            "labels": labels,
         }

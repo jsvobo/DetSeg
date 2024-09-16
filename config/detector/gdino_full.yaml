@@ -1,0 +1,4 @@
+class_name: GroundingDinoFull
+text_threshold: 0.2
+box_threshold: 0.2
+

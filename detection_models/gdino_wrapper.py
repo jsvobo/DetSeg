@@ -10,19 +10,8 @@ from omegaconf import DictConfig, OmegaConf
 class GrDINO(BaseDetectorWrapper):
 
     def compose_text_prompt(self, all_classes):
-        self.text_prompt = ".".join(all_classes)
+        self.text_prompt = ". ".join(all_classes)
         self.all_classes = all_classes.copy()
-        self.all_classes.append("")
-        print(self.text_prompt)
-        print(len(self.all_classes))
-
-    def classes_to_indices(self, list_of_classes):
-        # maybe ask the dataset? in imagenet this conversion is tricky!
-        return [self.all_classes.index(c) for c in list_of_classes]
-
-    def indices_to_classes(self, list_of_indices):
-        # maybe ask the dataset? in imagenet this conversion is tricky!
-        return [self.all_classes[i] for i in list_of_indices]
 
 
 class GroundingDinoTiny(GrDINO):

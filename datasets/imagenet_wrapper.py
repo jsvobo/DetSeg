@@ -40,7 +40,7 @@ class ImagenetLoader(ImageNet):
         self.joined_classes = []
         for class_tuple in self.classes:
             # self.joined_classes.extend(list(class_tuple))
-            self.joined_classes.append(class_tuple[0])
+            self.joined_classes.append(class_tuple[0])  # just the first of the synonyms
 
     def get_cat_keys(self):
         # all class numbers

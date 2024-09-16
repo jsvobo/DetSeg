@@ -108,3 +108,15 @@ def box_coco_to_sam(coco_box):
         round((coco_box[0] + coco_box[2])),
         round((coco_box[1] + coco_box[3])),
     )
+
+
+def box_torch2xyxy(box_matrix):
+    """
+    Convert torch box from xywh to xyxy format
+    """
+    x0 = box_matrix[:, 0]
+    y0 = box_matrix[:, 1]
+    w = box_matrix[:, 2]
+    h = box_matrix[:, 3]
+    box_result = torch.round(torch.stack((x0, y0, x0 + w, y0 + h), dim=1))
+    return box_result.type(torch.int32)

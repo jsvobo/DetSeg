@@ -10,7 +10,7 @@
         cp location ./datasets/
         ln -s location ./datasets/
 
-
+    git clone https://github.com/IDEA-Research/GroundingDINO.git
 
 ## Commands - Collection of useful commands not needed rn, keep here for future reference
 

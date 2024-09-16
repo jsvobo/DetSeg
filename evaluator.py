@@ -159,10 +159,7 @@ class Evaluator:
             class_metrics=False,
         )
 
-        # batch metrics, mAP, classful, per class, maybe extended output
-        self.seg_map_classful = MeanAveragePrecision(
-            iou_type="segm", average="macro", class_metrics=True, extended_summary=False
-        )
+        # batch metrics, mAP, classful, per class
         self.det_map_classful = MeanAveragePrecision(
             iou_type="bbox", average="macro", class_metrics=True, extended_summary=False
         )
@@ -197,7 +194,7 @@ class Evaluator:
         self.boxes_dict["box_id"].extend(range_gt)
         self.masks_dict["mask_id"].extend(range_gt)
 
-        # all these have the same image number 10,10,10,...
+        # all these have the same image number 10,10,10,..., just store the image number
         img_idx_arr = np.ones(len(boxes), dtype=np.int32) * image_id
         self.boxes_dict["image_id"].extend(img_idx_arr)
         self.masks_dict["image_id"].extend(img_idx_arr)
@@ -205,7 +202,7 @@ class Evaluator:
     def store_matches(self, matches, ious, object_type):
         """
         One set of matches at a time
-        Is stored inside a dict of lists for future reference when computing stuff or saving
+        Is stored inside a dict of lists for future reference when computing metrics or saving
         """
 
         if object_type == "boxes":
@@ -219,9 +216,11 @@ class Evaluator:
         """
         Store the number of detections for every image,
         + save the detections themselves (boxes, masks) if needed
-        Uses saver class passed down from pipeline.
+        Uses saver class passed down from pipeline, so evaluator does not need to know about paths and such.
         """
-        for image_id, boxes, masks in zip(indices, results["boxes"], results["masks"]):
+        for image_id, boxes, masks, labels in zip(
+            indices, results["boxes"], results["masks"], results["class_labels"]
+        ):
 
             num_detections = len(boxes)
             self.image_dict["image_id"].append(image_id)
@@ -230,7 +229,7 @@ class Evaluator:
             # save the result dictionary into one file per image
             if self.cfg.save_results and self.cfg.save_results_per_image:
                 # save anything and save per image
-                self.saver.save_per_image(boxes, masks, image_id)
+                self.saver.save_per_image(boxes, masks, labels, image_id)
 
     def prepare_gt(self, metadata, indices):
         # processes metadata of an image to access gt boxes, masks and classes,
@@ -294,7 +293,6 @@ class Evaluator:
             self.det_map_classful.update(preds=detected_dict, target=gt_dict)
         elif object_type == "masks":
             self.seg_map_classless.update(preds=detected_dict, target=gt_classless_dict)
-            self.seg_map_classful.update(preds=detected_dict, target=gt_dict)
 
         # 1:1 matching and IoU calculation for each image
         for batch_idx in range(len(detected_objects)):
@@ -363,9 +361,6 @@ class Evaluator:
                 "avg iou": seg_iou,
                 "mAP without classes": utils.convert_tensors_to_save(
                     self.seg_map_classless.compute()
-                ),
-                "mAP with classes": utils.convert_tensors_to_save(
-                    self.seg_map_classful.compute()
                 ),
             }
         )

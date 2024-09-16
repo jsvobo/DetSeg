@@ -115,9 +115,16 @@ def print_masks_boxes(
     prints all masks and boxes on the image
     if None is provided, no boxes are printed, same for masks
     """
-    plt.figure(figsize=(scale, scale))
-    plt.imshow(image)  # first image
-    plt.axis("off")
+    fig, axes = plt.subplots(1, 2, figsize=(2 * scale, scale))
+    axes = axes.flatten()
+
+    ax = axes[0]
+    ax.imshow(image)  # first image
+    ax.axis("off")
+
+    ax = axes[1]
+    ax.imshow(image)  # first image
+    ax.axis("off")
 
     has_masks = (masks is not None) and (len(masks) > 0)
     has_boxes = (boxes is not None) and (len(boxes) > 0)
@@ -136,12 +143,12 @@ def print_masks_boxes(
             alpha[np.where(mask_sum == 0)] = 0
         else:
             alpha[np.where(mask_sum == 0)] = opacity / 2
-        plt.imshow(mask_sum, cmap=cmap, alpha=alpha)
+        ax.imshow(mask_sum, cmap=cmap, alpha=alpha)
 
     if has_boxes:
         num_boxes = len(boxes)
         for i, box in enumerate(boxes):  # all masks
-            utils.plot_box(box, plt.gca(), linewidth=linewidth)
+            utils.plot_box(box, ax, linewidth=linewidth)
 
     plt.show()
 
