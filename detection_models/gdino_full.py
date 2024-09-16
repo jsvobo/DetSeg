@@ -7,6 +7,11 @@ from omegaconf import DictConfig, OmegaConf
 from detection_models.gdino_wrapper import GrDINO
 from groundingdino.util.inference import Model, predict
 from torchvision.transforms.functional import to_pil_image
+from difflib import SequenceMatcher
+
+
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
 
 
 class GroundingDinoFull(Model, GrDINO):
@@ -20,7 +25,7 @@ class GroundingDinoFull(Model, GrDINO):
         )
 
         # prepare prompt for grounding dino
-        self.classes = all_classes
+        self.classes = [cl.lower() for cl in all_classes]  # list of classes
         self.compose_text_prompt(self.classes)  # function of GrDINO
 
         if (
@@ -52,7 +57,7 @@ class GroundingDinoFull(Model, GrDINO):
         )  # function of Model, propose some class indices based on output phrases
 
         class_id = [-1 if id is None else id for id in class_id]
-        print(class_id)
+
         sizes = image.shape[:2]  # (h,w) from numpy array img, to scale back up
         boxes = boxes * torch.tensor(  # scale back up
             [sizes[1], sizes[0], sizes[1], sizes[0]],
@@ -70,7 +75,8 @@ class GroundingDinoFull(Model, GrDINO):
         return results
 
     def detect_boxes(self, items):
-        # takes list of item, as returned by dataset loader(s)
+        # takes list of item, as returned by dataset loader(s) in thsi project.
+        #  not to be used on batches, but lists of images
         results = []
         for item in items:
             image = item["image"]
@@ -87,11 +93,9 @@ class GroundingDinoFull(Model, GrDINO):
         boxes, classes, scores = [], [], []
         for image in images:
             output = self.detect_individual(image)
-            boxes.append(output["boxes"])  # just boxes
-            classes.append(
-                [0 for _ in output["labels"]]
-            )  # no classes here, labels are text, not numbers!
-            scores.append(output["scores"])  # confidence scores
+            boxes.append(output["boxes"])
+            classes.append(output["labels"])
+            scores.append(output["scores"])
         return {
             "boxes": boxes,
             "class_labels": classes,
@@ -100,17 +104,50 @@ class GroundingDinoFull(Model, GrDINO):
             "point_labels": None,  # no point labels
         }  # return outputs for all images
 
+    @staticmethod
+    def phrases2classes(phrases, classes) -> np.ndarray:
+        # more sophisticated function to match phrases to classes
+        # sometimes phrases are parts of classes, so no match would be found (trice in triceratops)
+        # gar wrongly matches to garder in classes, while it is its own class.
+        class_ids = []
+        for phrase in phrases:
+            phrase_matches = []  # list of (class_name, similarity) for each phrase
+
+            for class_ in classes:
+                if class_ in phrase:
+                    similarity = similar(phrase, class_)
+                    phrase_matches.append((class_, similarity))
+                    if similarity == 1.0:
+                        # perfect match, no need to look further and no need for reverse lookup of phrases
+                        break
+                if phrase in class_:
+                    # the other way around, phrase is part of class name (trice in triceratops etc.)
+                    similarity = similar(phrase, class_)
+                    phrase_matches.append((class_, similarity))
+
+            # if there are matches, get the best one
+            if len(phrase_matches) > 0:
+                # also duplicates are possible :)) when similarity is 1.0, so only perfect match
+                phrase_matches = sorted(
+                    phrase_matches, key=lambda x: x[1], reverse=True
+                )
+                class_ids.append(classes.index(phrase_matches[0][0]))
+            else:
+                class_ids.append(None)
+        return np.array(class_ids)  # return best match for every
+
 
 def test_grounding_dino_full():
+    print("\nTesting grounding dino full")
     from datasets.coco_wrapper import CocoLoader, get_coco_split
 
     transforms = None
-    coco_train_dataset = CocoLoader(get_coco_split(split="val"), transform=transforms)
-    all_classes = coco_train_dataset.get_classes()
+    dataset = CocoLoader(get_coco_split(split="val"), transform=transforms)
+    all_classes = dataset.get_classes()
 
-    gd = GroundingDinoTiny(device="cuda", cfg=None, all_classes=all_classes)
+    gd = GroundingDinoFull(device="cuda", cfg=None, all_classes=all_classes)
 
-    batch = [item["image"] for item in coco_train_dataset.get_amount(5)]
+    batch = [item["image"] for item in dataset.get_amount(5)]
     outputs = gd.detect_batch(batch)
     print(outputs["class_labels"])
 

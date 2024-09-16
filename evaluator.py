@@ -218,6 +218,9 @@ class Evaluator:
         + save the detections themselves (boxes, masks) if needed
         Uses saver class passed down from pipeline, so evaluator does not need to know about paths and such.
         """
+        if "masks" not in results.keys():  # dummy masks
+            results["masks"] = [torch.tensor([]) for _ in range(len(results["boxes"]))]
+
         for image_id, boxes, masks, labels in zip(
             indices, results["boxes"], results["masks"], results["class_labels"]
         ):
