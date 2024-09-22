@@ -320,7 +320,8 @@ class Evaluator:
                 det_scores=scores_per_img,  # tensor
                 iou_type=object_type,
             )
-            self.store_matches(matched_detections, match_ious, object_type)
+            if self.cfg.save_matches_to_gt:
+                self.store_matches(matched_detections, match_ious, object_type)
 
     def get_metrics(self):
         """

@@ -13,13 +13,14 @@ defaults:
  
 batch_size: 13
 max_batch:  None # None or integer. None for the whole dataset
-save_results: True # whether to save anything at all
-print_results: True
+save_results: True # whether to save anything at all, if False, the toher options are irrelevant
+print_results: False
 save_path:  /datagrid/fix_in/detection/ #./out/pipeline_results/
 evaluator: 
-  add_inverse : False
+  add_inverse: False
   # try to add an inverse mask to and maybe correct some of the images, where sam selects a bad object from the box
-  save_results_per_image: True
+  save_results_per_image: True 
+  save_matches_to_gt: False 
   # whether to save detected boxes and masks per image, or just aggregate results overall and save those
 
 

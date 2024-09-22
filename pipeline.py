@@ -81,9 +81,7 @@ class Pipeline:
         else:
             cfg.dataset.year = "None"
 
-        cfg.evaluator.save_results = (
-            cfg.save_results
-        )  # want to save detections per image
+        cfg.evaluator.save_results = cfg.save_results  # want a copy here
         return cfg
 
     def print_result_dict(self, result_dict):

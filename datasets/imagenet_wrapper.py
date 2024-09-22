@@ -10,10 +10,10 @@ from torch.utils.data import DataLoader
 
 def get_imagenet_split(split: str = "train", year: str = "2017", root=None):
     """
-    Returns the paths of the COCO dataset split for a given year.
+    Returns the paths of the imagenet dataset split for a given year.
     Args:
         split (str, optional): The split of the dataset. Defaults to "train".
-        year (str, optional): The year of the dataset. Defaults to "2017".
+        year: here for compatibility, imagenet has no year
         root is the root directory of datasets
     Returns:
         tuple: A tuple containing the image path and annotation path.
