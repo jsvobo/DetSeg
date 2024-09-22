@@ -1,6 +1,6 @@
 defaults:
-  - dataset: imagenet 
-  - detector: gdino_full  # gdino_tiny , gdino_full gt_middle, gt 
+  - dataset: imagenet # imagenet or coco
+  - detector: gdino_full  # gdino_tiny , gdino_full, gt_middle, gt 
   - segmentation: sam1 # sam2 in the future
   - class_list : dataset_defaults # categories, general, dataset_defaults
   
@@ -11,15 +11,14 @@ defaults:
   
   
  
-batch_size: 15 # h4, b5 on RTX4000, b8,h6 on A100 
-    # 14 fits well with gt (cca 38 GB) 
-max_batch: 1 # None or integer. None for the whole dataset
-save_results: False # whether to save anything at all
+batch_size: 13
+max_batch:  None # None or integer. None for the whole dataset
+save_results: True # whether to save anything at all
 print_results: True
-save_path: ./out/pipeline_results/
+save_path:  /datagrid/fix_in/detection/ #./out/pipeline_results/
 evaluator: 
   add_inverse : False
-  # try to add an inverse mask to and maybe correct some of the images, where sam selects a bad object alltogether
+  # try to add an inverse mask to and maybe correct some of the images, where sam selects a bad object from the box
   save_results_per_image: True
   # whether to save detected boxes and masks per image, or just aggregate results overall and save those
 

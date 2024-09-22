@@ -218,7 +218,7 @@ class Evaluator:
         + save the detections themselves (boxes, masks) if needed
         Uses saver class passed down from pipeline, so evaluator does not need to know about paths and such.
         """
-        if "masks" not in results.keys():  # dummy masks
+        if "masks" not in results.keys():  # dummy masks, no segmentation
             results["masks"] = [torch.tensor([]) for _ in range(len(results["boxes"]))]
 
         for image_id, boxes, masks, labels in zip(
@@ -380,9 +380,9 @@ class Evaluator:
         """
         return {
             "metrics": self.get_metrics(),
-            "boxes_df": self.boxes_dict,
-            "masks_df": self.masks_dict,
-            "image_level_df": self.image_dict,
+            "boxes_df": self.boxes_dict,  # dataframe containing matched boxes
+            "masks_df": self.masks_dict,  # dtafram econtaining matched masks
+            "image_level_df": self.image_dict,  # contains number of detections per image
         }
 
     def evaluate(self, data_loader, savepath=None, max_batch=None):

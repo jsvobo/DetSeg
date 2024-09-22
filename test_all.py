@@ -19,5 +19,5 @@ if __name__ == "__main__":
     test_matching_fn()
 
     # detection models
-    test_grounding_dino_tiny()  # will output a lot of 0s
-    test_grounding_dino_full()
+    test_grounding_dino_tiny()  # will output a lot of 0s, the model cannot recognize classes easily.
+    test_grounding_dino_full()  # this is repaired in gdino full

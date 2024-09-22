@@ -147,9 +147,8 @@ class Pipeline:
         if print_results:  # print results if requested
             self.print_result_dict(results["metrics"])
 
-        if (
-            save_results
-        ):  # save results using saver her. results per image are saved inside the evaluator
+        if save_results:
+            # save results using saver her. results per image are saved inside the evaluator
             saver.save_results(results)
 
 

@@ -46,14 +46,20 @@ class ResultSaver:
         os.makedirs(self.path, exist_ok=True)
         os.makedirs(self.masks_detections_folder, exist_ok=True)
 
-    def save_per_image(self, boxes, masks, labels, image_id):  # 2.3 GB
+    def save_per_image(self, boxes, masks, labels, image_id):
         subfolder_name = f"detections_{image_id}"
         folder_name = os.path.join(self.masks_detections_folder, subfolder_name)
-        os.makedirs(folder_name, exist_ok=True)  # make and folder for every image
 
-        np.savez_compressed(os.path.join(folder_name, "boxes.npz"), pred=boxes)
-        np.savez_compressed(os.path.join(folder_name, "masks.npz"), pred=masks)
-        np.savez_compressed(os.path.join(folder_name, "labels.npz"), pred=labels)
+        areas = self.calculate_area(boxes)
+
+        np.savez_compressed(  # adds .nzp extension
+            folder_name, areas=areas, boxes=boxes, masks=masks, labels=labels
+        )
+
+    def calculate_area(self, boxes):
+        area_boxes = [utils.area(box) for box in boxes]
+        area_type = [utils.find_range(area) for area in area_boxes]
+        return area_type
 
     def save_results(self, results):
         path = self.path
@@ -72,19 +78,18 @@ class ResultSaver:
 
         # calculate area type for every box.
         gt_boxes = boxes_df["gt"]
-        area_boxes = [utils.area(box) for box in gt_boxes]
-        area_type = [utils.find_range(area) for area in area_boxes]
+        area_type = self.calculate_area(gt_boxes)
         boxes_df["area"] = area_type
         masks_df["area"] = area_type
-
-        # save individual IoU results as pickle
-        boxes_df.to_pickle(os.path.join(path, "boxes_df.pkl"))
-        masks_df.to_pickle(os.path.join(path, "masks_df.pkl"))
 
         # save the number of detections per image (not what detections yet)
         image_level_df[["image_id", "num_detections"]].to_pickle(
             os.path.join(path, "image_df.pkl")
         )
+
+        # save individual IoU results as pickle
+        boxes_df.to_pickle(os.path.join(path, "boxes_df.pkl"))
+        masks_df.to_pickle(os.path.join(path, "masks_df.pkl"))
 
         print(
             f"\nResults saved to {path} \n with files:\
@@ -107,7 +112,7 @@ class ResultLoader:
 
     def load_same_dataset(self):
         """
-        loads the same dataset which was used for inference, base don config
+        loads the same dataset which was used for inference, based on config
         """
         cfg = self.load_config()["dataset"]
         split = cfg["split"]
@@ -171,30 +176,17 @@ class ResultLoader:
         folder_name : folder where the detections are saved inside the main folder (where config and results are saved)
             - if you dont have different structure, then dont provide any, default is fine
         """
-        path = os.path.join(self.path, folder_name, f"detections_{idx}")
-        path_boxes = os.path.join(path, "boxes.npy")
-        path_masks = os.path.join(path, "masks.npy")
-        path_labels = os.path.join(
-            path, "labels.npy"
-        )  # labels proposed by detector. if all 0, then the detector cann0t predict classes well
+        path = os.path.join(self.path, folder_name, f"detections_{idx}.npz")
 
         if not os.path.exists(path):
             print(f"Folder {path} does not exist.")
             return None
-        if (
-            not os.path.exists(path_boxes)
-            or not os.path.exists(path_masks)
-            or not os.path.exists(path_labels)
-        ):
-            print(f"one of the files does not exist in {path}")
-            return None
 
         # load boxes and masks, return in a dict
-        boxes = np.load(path_boxes)
-        masks = np.load(path_masks)
-        labels = np.load(path_labels)
+        nzp = np.load(path)
         return {
-            "boxes": boxes,  # [boxes[i] for i in range(boxes.shape[0])],
-            "masks": masks,
-            "labels": labels,
+            "boxes": nzp["boxes"],
+            "masks": nzp["masks"],
+            "labels": nzp["labels"],
+            "areas": nzp["areas"],
         }

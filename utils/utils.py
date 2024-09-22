@@ -112,11 +112,13 @@ def box_coco_to_sam(coco_box):
 
 def box_torch2xyxy(box_matrix):
     """
-    Convert torch box from xywh to xyxy format
+    Convert torch box from cx,cy,w,h to xyxy format center x and center y!! not left one!
+    input array of type float from 0 to 1
     """
-    x0 = box_matrix[:, 0]
-    y0 = box_matrix[:, 1]
-    w = box_matrix[:, 2]
-    h = box_matrix[:, 3]
-    box_result = torch.round(torch.stack((x0, y0, x0 + w, y0 + h), dim=1))
-    return box_result.type(torch.int32)
+    xc = box_matrix[:, 0]
+    yc = box_matrix[:, 1]
+    w = box_matrix[:, 2] / 2  # half span from center x, y
+    h = box_matrix[:, 3] / 2
+
+    box_result = torch.stack((xc - w, yc - h, xc + w, yc + h), dim=1)
+    return box_result

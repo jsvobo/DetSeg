@@ -55,20 +55,19 @@ class GroundingDinoFull(Model, GrDINO):
         class_id = self.phrases2classes(
             phrases=phrases, classes=self.classes
         )  # function of Model, propose some class indices based on output phrases
-
         class_id = [-1 if id is None else id for id in class_id]
 
         sizes = image.shape[:2]  # (h,w) from numpy array img, to scale back up
+
+        boxes = utils.box_torch2xyxy(boxes)
+        # transform as matrix from x,y,w,h to x0,y0,x1,y1
         boxes = boxes * torch.tensor(  # scale back up
             [sizes[1], sizes[0], sizes[1], sizes[0]],
-            dtype=torch.float32,  # * (w,h,w,h)' @ boxes
+            dtype=torch.float32,  # * (w,h,w,h) * boxes'   | @ --
         )
-        boxes = utils.box_torch2xyxy(
-            boxes
-        )  # transform as matrix from x,y,w,h to x0,y0,x1,y1
-
+        boxes = torch.round(boxes).type(torch.int32)  # round and cast to int32
         results = {
-            "boxes": torch.round(boxes.cpu().detach()).type(torch.int32),
+            "boxes": boxes,
             "labels": class_id,  # list of lists. for every box, more than 1 class suggestion is possible
             "scores": confidences,
         }
@@ -106,15 +105,17 @@ class GroundingDinoFull(Model, GrDINO):
 
     @staticmethod
     def phrases2classes(phrases, classes) -> np.ndarray:
-        # more sophisticated function to match phrases to classes
-        # sometimes phrases are parts of classes, so no match would be found (trice in triceratops)
-        # gar wrongly matches to garder in classes, while it is its own class.
+        # more sophisticated function to match phrases to classes. explanation briefly in config/detector/gdino_full.yaml
         class_ids = []
         for phrase in phrases:
-            phrase_matches = []  # list of (class_name, similarity) for each phrase
+            if phrase == "":
+                class_ids.append(None)
+                continue
 
+            phrase_matches = []  # list of (class_name, similarity) for each phrase
             for class_ in classes:
                 if class_ in phrase:
+                    # class name is a part of the phrase ("gar" in "gar triceratops table")
                     similarity = similar(phrase, class_)
                     phrase_matches.append((class_, similarity))
                     if similarity == 1.0:

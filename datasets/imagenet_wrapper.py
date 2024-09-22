@@ -55,7 +55,7 @@ class ImagenetLoader(ImageNet):
         # try to find this word in every tuple, return index of the whole label
         for class_tuple in self.classes:
             if name in list(class_tuple):
-                return self.class_to_idx(class_tuple)
+                return self.class_to_idx[name]
         return -1
 
     def get_amount(self, amount, offset=0):
@@ -84,7 +84,7 @@ class ImagenetLoader(ImageNet):
         }
 
     def catIDs_to_names(self, catIDs):
-        return [self.classes[int(catID)] for catID in catIDs]
+        return [self.classes[int(catID)] if catID != -1 else "None" for catID in catIDs]
 
     def create_dataloader(self, batch_size=4, num_workers=4):
 
