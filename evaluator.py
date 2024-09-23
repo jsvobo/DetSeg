@@ -243,8 +243,9 @@ class Evaluator:
             masks = instance["masks"]
             classes = instance["categories"]
 
-            # add to dicts for saving. gt masks/boxes and classes
-            self.store_gt(boxes, masks, classes, index)
+            # add to dicts for saving if needed. gt masks/boxes and classes
+            if self.cfg.save_matches_to_gt:
+                self.store_gt(boxes, masks, classes, index)
 
             # add to lists to return to eval for batch
             gt_boxes.append(boxes)

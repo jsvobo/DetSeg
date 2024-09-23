@@ -17,6 +17,8 @@ def get_imagenet_split(split: str = "train", year: str = "2017", root=None):
         root is the root directory of datasets
     Returns:
         tuple: A tuple containing the image path and annotation path.
+
+    this whole function is for compatibility with coco, where setting the path according to the split and year is inportant
     """
 
     assert split in ["train", "val"]
