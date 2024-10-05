@@ -1,4 +1,4 @@
-split: train  # train, val 
+split: val  # train, val 
 transforms: None
 
 #dont change, loads the appropriate class and such...

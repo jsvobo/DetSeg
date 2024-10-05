@@ -11,7 +11,7 @@ defaults:
   
   
  
-batch_size: 13
+batch_size: 8
 max_batch:  None # None or integer. None for the whole dataset
 save_results: True # whether to save anything at all, if False, the toher options are irrelevant
 print_results: False

@@ -1,5 +1,5 @@
 
-sam_model: b # b or h for sam1
+sam_model: h # b or h for sam1
 
 # dont change. 
 # this path leads to specification of chekpoints for different sizes
