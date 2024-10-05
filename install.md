@@ -6,11 +6,14 @@
         conda install python=3.11 pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia 
         pip install -r ./requirements.txt 
 
-    Copy/link coco to datasets/ folder ()
-        cp location ./datasets/
-        ln -s location ./datasets/
+    update paths to dataset and checkpoints inside the config directory. 
 
     git clone https://github.com/IDEA-Research/GroundingDINO.git
+    then refer to their readme to install. you have to have $CUDA_HOME set, then install in the subdir. 
+    download weights, (again, see in readme of grounding dino)
+
+
+
 
 ## Commands - Collection of useful commands not needed rn, keep here for future reference
 
