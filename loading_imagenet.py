@@ -55,10 +55,11 @@ class ImagenetResults:
 
         # load boxes and masks, return in a dict
         nzp = np.load(path)
-        image = self.dataset[idx][0]
+        image, gt_class = self.dataset[idx]
         image = np.asarray(image)
         return {
             "image": image,
+            "gt class": gt_class,
             "boxes": nzp["boxes"],
             "masks": nzp["masks"],
             "labels": nzp["labels"],
