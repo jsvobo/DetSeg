@@ -7,7 +7,7 @@ from omegaconf import DictConfig, OmegaConf
 import pprint
 
 import utils
-import datasets.dataset_loading as datasets
+import datasets
 import detection_models
 import segmentation_models
 from evaluator import Evaluator
@@ -30,11 +30,17 @@ class Pipeline:
         year = cfg.year
         root = cfg.root
 
+        transforms = cfg.transforms
+        if transforms != "None":  # get the specific transforms from datasets module
+            transforms = getattr(datasets, transforms)()
+        else:
+            transforms = None
+
         dataset_class = cfg.class_name
         get_path = cfg.split_fn
 
         path = getattr(datasets, get_path)(split=split, year=year, root=root)
-        dataset = getattr(datasets, dataset_class)(path, transform=None)
+        dataset = getattr(datasets, dataset_class)(path, transform=transforms)
         return dataset
 
     def prepare_class_list(self, cfg: DictConfig, dataset):
@@ -70,25 +76,28 @@ class Pipeline:
         # change some small thing, like types from the loaded config
         mb = cfg.max_batch
         cfg.max_batch = None if mb == "None" else int(mb)
-        cfg.dataset.year = str(cfg.dataset.year)
+        if "year" in cfg.dataset.keys():
+            cfg.dataset.year = str(cfg.dataset.year)
+        else:
+            cfg.dataset.year = "None"
+
+        cfg.evaluator.save_results = cfg.save_results  # want a copy here
         return cfg
 
-    def print_results(self, result_dict):
+    def print_result_dict(self, result_dict):
         """
-        Structured output of the results
+        Structured output of the results for det and seg metrics
         """
-        mean_seg_IoU = result_dict["mean seg IoU"]
-        mean_det_IoU = result_dict["mean det IoU"]
+        det = result_dict["detection"]
+        seg = result_dict["segmentation"]
 
         print("\nResults:")
         print("Detection metrics:")
-        print(f"    Mean IoU: {round(float(mean_det_IoU),3)}")
-        pprint.pprint(result_dict["classless mAP - detection"])  # add more dicts here?
+        utils.print_for_task(det)
 
         if self.cfg.segmentation.class_name != "None":
             print("Segmentation metrics:")
-            print(f"    Mean IoU: {round(float(mean_seg_IoU),3)}")
-            pprint.pprint(result_dict["classless mAP - segmentation"])
+            utils.print_for_task(seg)
 
     def run(self, cfg: dict):
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -111,9 +120,13 @@ class Pipeline:
         boxes_transform = None
         # no transformation for now. load from config? prepare func for transform
 
+        # saver class, works with the batches and overall results
+        saver = datasets.ResultSaver(cfg)
+
         # Instantiate the Evaluator with the requested parameters
         evaluator = Evaluator(
             cfg=cfg.evaluator,
+            saver=saver,
             device=device,
             model_det=detector,
             model_seg=segmentation_model,
@@ -127,20 +140,14 @@ class Pipeline:
 
         # run the evaluation and collect results
         evaluator.evaluate(data_loader, max_batch=cfg.max_batch)
-        result_dict, array_masks, array_boxes, index_array = evaluator.get_metrics()
+        results = evaluator.get_results()
 
-        if print_results:
-            self.print_results(result_dict)
+        if print_results:  # print results if requested
+            self.print_result_dict(results["metrics"])
 
-        # save result dictionary and metadata to a file.
         if save_results:
-            utils.save_results(
-                result_dict=result_dict,
-                array_masks=array_masks,  # array of IoU for masks and boxes
-                array_boxes=array_boxes,
-                index_array=index_array,
-                cfg=cfg,
-            )
+            # save results using saver her. results per image are saved inside the evaluator
+            saver.save_results(results)
 
 
 @hydra.main(config_path="config", config_name="pipeline_config.yaml", version_base=None)

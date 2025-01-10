@@ -5,4 +5,4 @@ mvits_for_class_agnostic_od
 out/
 outputs/
 .vscode
-
+GroundingDINO/

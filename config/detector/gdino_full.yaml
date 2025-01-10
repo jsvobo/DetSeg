@@ -1,0 +1,29 @@
+class_name: GroundingDinoFull
+text_threshold: 0.17
+box_threshold: 0.17
+# very specific values, i know.
+#  lower box thr -> many more boxes(100s) but many similar boxes
+#         higher -> just a few objects
+
+# lower text thr -> high number of suggestions foe every box. not precise
+#     higher -> or boxes, some '' predictions are made. this is matched as None
+# 0.17 seems to be a good value for both, since we have some boxes (10-20) and some predictions for every box, 1-3 classes mixed
+
+# atm class retrieval from suggestions (fn phrases2classes in gt_dino_full) is not perfect, 
+# but  PROBABLY better than the original for grounding dino.
+
+# ORIGINALLY, authors look if a class name is in the phrase (a text for every box containing phrase suggestions obtained from grounding dino)
+# we additionally look, if the phrase itself is a part of a class name, 
+#   since for example tricer is often suggested, but the class name is triceratops
+# We also calculater similarity coefficient between the phrase and the class name. 
+# this helps us in a case, that phrase is "gar" and classes corresonding are "black garden spider" and "gar" (a fish species)
+# int hsi case, gar is more similar to gar than to black garden spider, so we choose the correct class. 
+# this happend in a few more cases
+
+# problems of out approach:
+# when the output is african, we have classes dog, elephant and such. dog is selected, since the class name is the shortest
+# even though we dont have any info on what is in the image, and we probably whould not choose any class arbitrarily?
+# when thre are several complete class names in the phrase, still the longest is selected, even thought here are several perfect matches
+
+
+

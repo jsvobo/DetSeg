@@ -1,0 +1,8 @@
+split: val  # train, val 
+transforms: None
+
+#dont change, loads the appropriate class and such...
+name: imagenet
+class_name: ImagenetLoader
+split_fn: get_imagenet_split
+root: /mnt/vrg2/imdec/datasets/ImageNet/imagenet_pytorch # where the dataset is loaded 

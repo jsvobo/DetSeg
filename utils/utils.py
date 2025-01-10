@@ -95,3 +95,30 @@ def crop_xyxy(img, mask, box, crop_box):
     cropped_mask = mask[y0:y1, x0:x1]  # need to also crop the w,h
 
     return cropped_img, cropped_mask, box_coords
+
+
+def box_coco_to_sam(coco_box):
+    """
+    Convert coco box to sam box
+    from x0,y0,w,h to x0,y0,x1,y1
+    """
+    return (
+        round(coco_box[0]),
+        round(coco_box[1]),
+        round((coco_box[0] + coco_box[2])),
+        round((coco_box[1] + coco_box[3])),
+    )
+
+
+def box_torch2xyxy(box_matrix):
+    """
+    Convert torch box from cx,cy,w,h to xyxy format center x and center y!! not left one!
+    input array of type float from 0 to 1
+    """
+    xc = box_matrix[:, 0]
+    yc = box_matrix[:, 1]
+    w = box_matrix[:, 2] / 2  # half span from center x, y
+    h = box_matrix[:, 3] / 2
+
+    box_result = torch.stack((xc - w, yc - h, xc + w, yc + h), dim=1)
+    return box_result

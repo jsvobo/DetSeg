@@ -7,10 +7,37 @@ from tqdm import tqdm
 import pandas as pd
 
 import utils
-from datasets.dataset_loading import CocoLoader, get_coco_split
+from datasets import CocoLoader, get_coco_split, ImagenetLoader, get_imagenet_split
 import segmentation_models
 import detection_models
 import matching
+import json
+
+
+def _compute_metrics_for_frame(frame, number_detections):
+    number_GT = len(frame)
+    matched = frame[frame["iou"] != 0]
+    not_matched = frame[frame["iou"] == 0]
+
+    TP = len(matched)  # matched GT
+    FN = len(not_matched)  # missed GT
+    FP = number_detections - TP  # how many detection did not match with anything?
+
+    recall = TP / number_GT if number_GT != 0 else 0  # TP / all GTs
+    precision = (
+        TP / number_detections if number_detections != 0 else 0
+    )  # TP / all detections
+    f1 = (2 * TP) / (2 * TP + FP + FN)  # alternative to calculate F1
+
+    metrics = {
+        "TP": int(TP),
+        "FN": int(FN),
+        "FP": int(FP),
+        "Recall": float(recall),
+        "Precision": float(precision),
+        "F1": float(f1),
+    }
+    return metrics
 
 
 def to_dict_for_map(objects, classes, scores, object_type):
@@ -79,6 +106,7 @@ class Evaluator:
     def __init__(
         self,
         cfg,
+        saver,
         model_seg=None,
         device="cuda",
         seg_pairwise_metrics=None,
@@ -93,9 +121,31 @@ class Evaluator:
         self.boxes_transform = boxes_transform
         self.device = device
         self.cfg = cfg
+        self.image_counter = 0
+        self.saver = saver
 
-        self.iou_boxes, self.iou_masks = [], []
-        self.evaluated = False
+        # dicts for saving detection and segmentation metadata
+        self.boxes_dict = {
+            "image_id": [],
+            "box_id": [],
+            "gt": [],
+            "match": [],
+            "iou": [],
+            "gt_class": [],
+        }
+        self.masks_dict = {
+            "image_id": [],
+            "mask_id": [],
+            "gt": [],
+            "match": [],
+            "iou": [],
+            "gt_class": [],
+        }
+
+        self.image_dict = {
+            "image_id": [],
+            "num_detections": [],
+        }
 
         # batch metrics, mAP, but CA/classless
         self.det_map_classless = MeanAveragePrecision(
@@ -109,32 +159,99 @@ class Evaluator:
             class_metrics=False,
         )
 
-        # batch metrics, mAP, classful, per class, maybe extended output
-        self.seg_batch_classful = MeanAveragePrecision(
-            iou_type="segm", average="macro", class_metrics=True, extended_summary=False
-        )
-        self.det_batch_classful = MeanAveragePrecision(
+        # batch metrics, mAP, classful, per class
+        self.det_map_classful = MeanAveragePrecision(
             iou_type="bbox", average="macro", class_metrics=True, extended_summary=False
         )
 
         # calculating something at all, if det=None, then gt is used
-        assert (model_seg is not None) or (model_det is not None)
+        assert (model_seg is not None) or (
+            model_det is not None
+        ), "have to evaluate something: det, seg or both"
 
     def matching(self, gt, det, det_scores, iou_type):
         """
         returns matched objects and IoUs of the matched pairs
         threshold is hardcoded to 0.5 to filter bad matches
         """
-        # additional code can be wrapped here?
-        # mainly need to call matching fn
         return matching.matching_fn(
             gt, det, det_scores, threshold=0.5, iou_type=iou_type
         )
 
-    def prepare_gt(self, metadata):
-        gt_boxes = [instance["boxes"] for instance in metadata]
-        gt_masks = [instance["masks"].type(torch.uint8) for instance in metadata]
-        gt_classes = [instance["categories"] for instance in metadata]
+    def store_gt(self, boxes, masks, classes, image_id):
+        # add to dicts for saving later. gt masks/boxes and classes
+        boxes = boxes.numpy()
+        masks = masks.numpy()
+        classes = classes.numpy()
+
+        self.boxes_dict["gt"].extend(boxes)
+        self.masks_dict["gt"].extend(masks)
+        self.boxes_dict["gt_class"].extend(classes)
+        self.masks_dict["gt_class"].extend(classes)
+
+        # id of mask/box in the individual image, same len 0,1,2,3,...
+        range_gt = np.arange(len(boxes)).tolist()
+        self.boxes_dict["box_id"].extend(range_gt)
+        self.masks_dict["mask_id"].extend(range_gt)
+
+        # all these have the same image number 10,10,10,..., just store the image number
+        img_idx_arr = np.ones(len(boxes), dtype=np.int32) * image_id
+        self.boxes_dict["image_id"].extend(img_idx_arr)
+        self.masks_dict["image_id"].extend(img_idx_arr)
+
+    def store_matches(self, matches, ious, object_type):
+        """
+        One set of matches at a time
+        Is stored inside a dict of lists for future reference when computing metrics or saving
+        """
+
+        if object_type == "boxes":
+            self.boxes_dict["iou"].extend(ious)
+            self.boxes_dict["match"].extend(matches)
+        elif object_type == "masks":
+            self.masks_dict["iou"].extend(ious)
+            self.masks_dict["match"].extend(matches)
+
+    def store_detections(self, indices, results):
+        """
+        Store the number of detections for every image,
+        + save the detections themselves (boxes, masks) if needed
+        Uses saver class passed down from pipeline, so evaluator does not need to know about paths and such.
+        """
+        if "masks" not in results.keys():  # dummy masks, no segmentation
+            results["masks"] = [torch.tensor([]) for _ in range(len(results["boxes"]))]
+
+        for image_id, boxes, masks, labels in zip(
+            indices, results["boxes"], results["masks"], results["class_labels"]
+        ):
+
+            num_detections = len(boxes)
+            self.image_dict["image_id"].append(image_id)
+            self.image_dict["num_detections"].append(num_detections)
+
+            # save the result dictionary into one file per image
+            if self.cfg.save_results and self.cfg.save_results_per_image:
+                # save anything and save per image
+                self.saver.save_per_image(boxes, masks, labels, image_id)
+
+    def prepare_gt(self, metadata, indices):
+        # processes metadata of an image to access gt boxes, masks and classes,
+        gt_boxes, gt_masks, gt_classes = [], [], []
+        for instance, index in zip(metadata, indices):
+            # extract from metadata
+            boxes = instance["boxes"]
+            masks = instance["masks"]
+            classes = instance["categories"]
+
+            # add to dicts for saving if needed. gt masks/boxes and classes
+            if self.cfg.save_matches_to_gt:
+                self.store_gt(boxes, masks, classes, index)
+
+            # add to lists to return to eval for batch
+            gt_boxes.append(boxes)
+            gt_classes.append(classes)
+            gt_masks.append(masks)
+
         return {"boxes": gt_boxes, "masks": gt_masks, "classes": gt_classes}
 
     def update_metrics(self, results, gt, object_type="boxes"):
@@ -146,15 +263,18 @@ class Evaluator:
                 "class_labels" list of lists of classes,
                 "confidence": list of lists of confidence score for each detection
         """
-
         assert object_type in ["boxes", "masks"]
+
+        # extract the results
         detected_objects = results[object_type]
         detected_classes = results["class_labels"]
         detected_scores = results["confidence"]
 
+        # extract gt from its dict
         gt_objects = gt[object_type]
         gt_classes = gt["classes"]
 
+        # convert to dicts for mAP class to calculate with.
         detected_dict = to_dict_for_map(
             objects=detected_objects,
             classes=detected_classes,
@@ -174,54 +294,98 @@ class Evaluator:
         # M:N metrics
         if object_type == "boxes":
             self.det_map_classless.update(preds=detected_dict, target=gt_classless_dict)
-            self.det_batch_classful.update(preds=detected_dict, target=gt_dict)
+            self.det_map_classful.update(preds=detected_dict, target=gt_dict)
         elif object_type == "masks":
             self.seg_map_classless.update(preds=detected_dict, target=gt_classless_dict)
-            self.seg_batch_classful.update(preds=detected_dict, target=gt_dict)
 
         # 1:1 matching and IoU calculation for each image
         for batch_idx in range(len(detected_objects)):
+            to_match_per_img = detected_objects[batch_idx].cpu()
+            scores_per_img = detected_scores[batch_idx].cpu()
+            gt_objects_per_img = gt_objects[batch_idx].cpu()
+
+            # add inverse masks if needed
+            if object_type == "masks" and self.cfg.add_inverse:
+
+                if to_match_per_img.shape[0] != 0:  # if somethign detected
+                    inverse = ~to_match_per_img
+                    to_match_per_img = torch.concat((to_match_per_img, inverse), dim=0)
+                    scores_per_img = torch.concat(
+                        (scores_per_img, scores_per_img), dim=0
+                    )
+
+            # match 1:1 and store the matches.
             matched_detections, match_ious = self.matching(
-                gt=gt_objects[batch_idx].cpu(),  # tensor
-                det=detected_objects[batch_idx].cpu(),  # tensor
-                det_scores=detected_scores[batch_idx].cpu(),  # tensor
+                gt=gt_objects_per_img,  # tensor
+                det=to_match_per_img,  # tensor
+                det_scores=scores_per_img,  # tensor
                 iou_type=object_type,
             )
-            if object_type == "boxes":
-                self.iou_boxes.extend(match_ious)
-            elif object_type == "masks":
-                self.iou_masks.extend(match_ious)
+            if self.cfg.save_matches_to_gt:
+                self.store_matches(matched_detections, match_ious, object_type)
 
     def get_metrics(self):
         """
         Do final calculation of torchmetrics classes and wrap the results in a dict
         returns result dict, box and mask IoU arrays
         """
-        assert self.evaluated, "You must first evaluate on a dataset"
-        result_dict = {
-            # Average IoU
-            "mean det IoU": float(np.mean(np.array(self.iou_boxes))),
-            "mean seg IoU": float(np.mean(np.array(self.iou_masks))),
-            # mAPs , classless and per class for both seg,det
-            "classless mAP - detection": utils.convert_tensors_to_save(
-                self.det_map_classless.compute()
-            ),
-            "classless mAP - segmentation": utils.convert_tensors_to_save(
-                self.seg_map_classless.compute()
-            ),
-            "classful mAP - detection": utils.convert_tensors_to_save(
-                self.det_batch_classful.compute()
-            ),
-            "classful mAP - segmentation": utils.convert_tensors_to_save(
-                self.seg_batch_classful.compute()
-            ),
-        }
-        return (
-            result_dict,
-            np.array(self.iou_masks),
-            np.array(self.iou_boxes),
-            np.array([]),  # TODO: for now, index array? pd frame?
+
+        # finally create dataframes from the dicts, filled with []
+        self.masks_dict = pd.DataFrame(self.masks_dict)
+        self.boxes_dict = pd.DataFrame(self.boxes_dict)
+        self.image_dict = pd.DataFrame(self.image_dict)
+
+        # average IoU
+        det_iou = float(np.mean(np.array(self.boxes_dict["iou"])))
+        seg_iou = float(np.mean(np.array(self.masks_dict["iou"])))
+
+        # TP,FN,Recall etc.
+        total_detections = self.image_dict["num_detections"].sum()
+        detection_metrics = _compute_metrics_for_frame(
+            self.boxes_dict, total_detections
         )
+        segmentation_metrics = _compute_metrics_for_frame(
+            self.masks_dict, total_detections
+        )
+
+        # add precomputed metrics to these dicts
+        detection_metrics.update(
+            {
+                "avg iou": det_iou,
+                "mAP without classes": utils.convert_tensors_to_save(
+                    self.det_map_classless.compute()
+                ),
+                "mAP with classes": utils.convert_tensors_to_save(
+                    self.det_map_classful.compute()
+                ),
+            }
+        )
+
+        segmentation_metrics.update(
+            {
+                "avg iou": seg_iou,
+                "mAP without classes": utils.convert_tensors_to_save(
+                    self.seg_map_classless.compute()
+                ),
+            }
+        )
+
+        return {
+            "detection": detection_metrics,
+            "segmentation": segmentation_metrics,
+        }
+
+    def get_results(self):
+        """
+        Packages the results into a dict. useful for saving via ResultSaver class
+        Metrics are computed from stored gt and detection data via self.get_metrics()
+        """
+        return {
+            "metrics": self.get_metrics(),
+            "boxes_df": self.boxes_dict,  # dataframe containing matched boxes
+            "masks_df": self.masks_dict,  # dtafram econtaining matched masks
+            "image_level_df": self.image_dict,  # contains number of detections per image
+        }
 
     def evaluate(self, data_loader, savepath=None, max_batch=None):
         """
@@ -235,20 +399,19 @@ class Evaluator:
             None
             Metrics are stored in the torchmetrics classes, and can be accessed with get_metrics()
         """
-
-        for batch_idx, batch in tqdm(enumerate(data_loader)):
+        for batch_idx, (images, metadata, indices) in tqdm(enumerate(data_loader)):
+            # early stop
             if (max_batch is not None) and (batch_idx >= max_batch):
                 break
-            images = list(batch[0])
-            metadata = list(batch[1])
 
             # list of list of mask/boxes and classes as GT
-            gt = self.prepare_gt(metadata)
+            # retriesve and save gt boxes, masks, classes
+            gt = self.prepare_gt(metadata, indices)
 
             # detection module. attention points and labels possible with detection classes
             detection_results = self.model_det.detect_batch(
                 images, metadata
-            )  # need metadata for GT
+            )  # need metadata for GT for some of them?
 
             # detection metrics
             self.update_metrics(results=detection_results, gt=gt, object_type="boxes")
@@ -260,18 +423,21 @@ class Evaluator:
             # segment, calculate metrics
             if self.model_seg is not None:
                 segmentation_results = self.model_seg.infer_batch(
-                    images, detection_results
+                    images, detection_results  # pass boxes and images
                 )
 
-                # if segmentation, then calculate metrics
+                # same classes as for detection for metric computation
                 segmentation_results["class_labels"] = detection_results["class_labels"]
-
                 self.update_metrics(
                     results=segmentation_results, gt=gt, object_type="masks"
                 )
+                detection_results["masks"] = segmentation_results["masks"]
 
-        # I can return the metrics after this, otherwise error
-        self.evaluated = True
+            # save the results per image
+            self.store_detections(indices, detection_results)
+
+            # cuda clean-up
+            torch.cuda.empty_cache()
 
 
 def test_evaluator():
@@ -287,6 +453,7 @@ def test_evaluator():
     evaluator = Evaluator(
         device=device,
         cfg=None,
+        saver=None,
         model_det=detector,
         model_seg=segmentation_model,
         boxes_transform=boxes_transform,

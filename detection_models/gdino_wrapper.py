@@ -10,15 +10,8 @@ from omegaconf import DictConfig, OmegaConf
 class GrDINO(BaseDetectorWrapper):
 
     def compose_text_prompt(self, all_classes):
-        self.text_prompt = ".".join(all_classes)
+        self.text_prompt = ". ".join(all_classes)
         self.all_classes = all_classes.copy()
-        self.all_classes.append("")
-
-    def classes_to_indices(self, list_of_classes):
-        return [self.all_classes.index(c) for c in list_of_classes]
-
-    def indices_to_classes(self, list_of_indices):
-        return [self.all_classes[i] for i in list_of_indices]
 
 
 class GroundingDinoTiny(GrDINO):
@@ -60,7 +53,9 @@ class GroundingDinoTiny(GrDINO):
             target_sizes=[target_size],
         )
         results = results[0]
-        results["boxes"] = torch.round(results["boxes"].cpu()).type(torch.int32)
+        results["boxes"] = torch.round(results["boxes"].cpu().detach()).type(
+            torch.int32
+        )
         return results
 
     def detect_boxes(self, items):
@@ -70,7 +65,11 @@ class GroundingDinoTiny(GrDINO):
             image = item["image"]
             output = self.detect_individual(image)
             results.append(
-                {"boxes": output["boxes"], "labels": [0 for _ in output["labels"]]}
+                {
+                    "boxes": output["boxes"],
+                    "labels": [0 for _ in output["labels"]],
+                    "scores": output["scores"],
+                }
             )
         return results
 
@@ -98,8 +97,8 @@ class GroundingDinoTiny(GrDINO):
         }  # return outputs for all images
 
 
-if __name__ == "__main__":
-    from datasets.dataset_loading import CocoLoader, get_coco_split
+def test_grounding_dino_tiny():
+    from datasets.coco_wrapper import CocoLoader, get_coco_split
 
     transforms = None
     coco_train_dataset = CocoLoader(get_coco_split(split="val"), transform=transforms)
@@ -110,3 +109,7 @@ if __name__ == "__main__":
     batch = [item["image"] for item in coco_train_dataset.get_amount(5)]
     outputs = gd.detect_batch(batch)
     print(outputs["class_labels"])
+
+
+if __name__ == "__main__":
+    test_grounding_dino_tiny()
